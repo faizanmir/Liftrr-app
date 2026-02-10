@@ -42,13 +42,75 @@ AI-powered workout form analyzer for Android. Uses on-device pose detection to t
    ```
    GOOGLE_WEB_CLIENT_ID=your_client_id_here
    ```
-4. The MediaPipe pose model downloads automatically on first build
-5. (Optional) For on-device LLM, run `./gradlew downloadLLMModel` and follow the instructions
 
 ## Building
 
 ```bash
 ./gradlew assembleDebug
+```
+
+## Model Setup
+
+### Pose Detection (Vision Model)
+
+The MediaPipe Pose Landmarker model (`pose_landmarker_heavy.task`) downloads automatically during the first build via the `downloadPoseModel` Gradle task. No manual steps needed.
+
+To manually trigger the download:
+```bash
+./gradlew downloadPoseModel
+```
+
+The model is saved to `app/src/main/assets/` and bundled into the APK.
+
+### On-Device LLM (Gemma)
+
+The LLM model is **not** bundled in the APK due to its size. It must be downloaded separately and pushed to the device.
+
+**Available models:**
+
+| Variant | Size | Notes |
+|---------|------|-------|
+| `gemma-3-1b` (default) | ~500MB | Fast, good for quick tips |
+| `gemma-1b` | ~500MB | Older, lighter model |
+| `gemma-2b` | ~1GB | Balanced quality/size |
+| `gemma-2b-fp16` | ~4GB | Best quality, large |
+
+**Step 1 — Download the model:**
+
+```bash
+./gradlew downloadLLMModel
+```
+
+Gemma models require manual download from Kaggle. The task will print detailed instructions. In short:
+
+1. Install the Kaggle CLI: `pip install kaggle`
+2. Set up credentials at https://www.kaggle.com/settings (create API token, save to `~/.kaggle/kaggle.json`)
+3. Download:
+   ```bash
+   kaggle models instances versions download google/gemma/tfLite/gemma-3-1b-it-int4
+   ```
+4. Move the downloaded file:
+   ```bash
+   mv *.bin app/src/main/assets/llm/gemma-3-1b.task
+   ```
+
+To use a different model variant:
+```bash
+./gradlew downloadLLMModel -Pmodel=gemma-2b
+```
+
+**Step 2 — Push to device (for development):**
+
+```bash
+./gradlew pushLLMModel
+```
+
+This pushes the model to `/data/local/tmp/llm/` on the connected device via `adb`.
+
+**Other LLM tasks:**
+
+```bash
+./gradlew cleanLLMModel    # Remove downloaded model files
 ```
 
 ## Architecture

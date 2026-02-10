@@ -26,6 +26,7 @@ import org.liftrr.data.preferences.ThemePreferences
 import org.liftrr.domain.workout.WorkoutReportHolder
 import org.liftrr.ml.ExerciseType
 import org.liftrr.ui.screens.connection.DeviceConnectionScreen
+import org.liftrr.ui.screens.analytics.AnalyticsScreen
 import org.liftrr.ui.screens.history.HistoryScreen
 import org.liftrr.ui.screens.home.HomeScreen
 import org.liftrr.ui.screens.permissions.PermissionScreen
@@ -53,6 +54,7 @@ sealed class Screen : NavKey {
     // Main
     @Serializable data object Home : Screen()
     @Serializable data object History : Screen()
+    @Serializable data object Analytics : Screen()
     @Serializable data object Settings : Screen()
 
     // Workout flow
@@ -151,7 +153,7 @@ private fun EntryProviderScope<NavKey>.mainEntries(
     entry<Screen.Home> {
         HomeScreen(
             onNavigateToHistory = { navigate(Screen.History) },
-            onNavigateToAnalytics = { },
+            onNavigateToAnalytics = { navigate(Screen.Analytics) },
             onNavigateToProfile = { navigate(Screen.Settings) },
             onStartWorkout = { navigate(Screen.SessionSetup) },
             onWorkoutClick = { id -> navigate(Screen.WorkoutPlayback(id)) }
@@ -163,6 +165,10 @@ private fun EntryProviderScope<NavKey>.mainEntries(
             onNavigateBack = goBack,
             onWorkoutClick = { id -> navigate(Screen.WorkoutPlayback(id)) }
         )
+    }
+
+    entry<Screen.Analytics> {
+        AnalyticsScreen(onNavigateBack = goBack)
     }
 
     entry<Screen.Settings> {
