@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!--  ==============================================  -->
+    <!--  Splash Screen Theme (Light Mode)               -->
+    <!--  ==============================================  -->
+    <style name="Theme.Liftrr.Splash" parent="Theme.SplashScreen">
+        <item name="windowSplashScreenBackground">@android:color/white</item>
+        <item name="windowSplashScreenAnimatedIcon">@drawable/avd_splash_final</item>
+        <item name="windowSplashScreenAnimationDuration">1000</item>
+        <item name="postSplashScreenTheme">@style/Theme.Liftrr</item>
+    </style>
+
+    <!--  ==============================================  -->
+    <!--  Base App Theme                                 -->
+    <!--  ==============================================  -->
+    <style name="Theme.Liftrr" parent="Theme.Material3.DayNight.NoActionBar" />
+</resources>

@@ -1,0 +1,86 @@
+# Add project specific ProGuard rules here.
+# You can control the set of applied configuration files using the
+# proguardFiles setting in build.gradle.
+#
+# For more details, see
+#   http://developer.android.com/guide/developing/tools/proguard.html
+
+# If your project uses WebView with JS, uncomment the following
+# and specify the fully qualified class name to the JavaScript interface
+# class:
+#-keepclassmembers class fqcn.of.javascript.interface.for.webview {
+#   public *;
+#}
+
+# Uncomment this to preserve the line number information for
+# debugging stack traces.
+-keepattributes SourceFile,LineNumberTable
+
+# If you keep the line number information, uncomment this to
+# hide the original source file name.
+#-renamesourcefileattribute SourceFile
+
+# ===============================================
+# MediaPipe Pose Detection
+# ===============================================
+
+# Keep MediaPipe classes
+-keep class com.google.mediapipe.** { *; }
+-keepclassmembers class com.google.mediapipe.** { *; }
+
+# Keep TensorFlow Lite
+-keep class org.tensorflow.lite.** { *; }
+-keepclassmembers class org.tensorflow.lite.** { *; }
+
+# Prevent obfuscation of native methods
+-keepclasseswithmembernames class * {
+    native <methods>;
+}
+
+# Keep MediaPipe task files
+-keep class com.google.mediapipe.tasks.** { *; }
+-keepclassmembers class com.google.mediapipe.tasks.** { *; }
+
+# Keep vision-specific classes
+-keep class com.google.mediapipe.tasks.vision.** { *; }
+-keepclassmembers class com.google.mediapipe.tasks.vision.** { *; }
+
+# Keep pose landmarker
+-keep class com.google.mediapipe.tasks.vision.poselandmarker.** { *; }
+-keepclassmembers class com.google.mediapipe.tasks.vision.poselandmarker.** { *; }
+
+# Keep containers and components
+-keep class com.google.mediapipe.tasks.components.** { *; }
+-keepclassmembers class com.google.mediapipe.tasks.components.** { *; }
+
+# ===============================================
+# Hilt
+# ===============================================
+-dontwarn com.google.errorprone.annotations.**
+
+# ===============================================
+# Retrofit & Gson
+# ===============================================
+-keepattributes Signature
+-keepattributes *Annotation*
+-keep class com.google.gson.** { *; }
+-keep class retrofit2.** { *; }
+
+# Keep data classes for serialization
+-keep class org.liftrr.data.models.** { *; }
+
+# ===============================================
+# Kotlin Coroutines
+# ===============================================
+-keepnames class kotlinx.coroutines.internal.MainDispatcherFactory {}
+-keepnames class kotlinx.coroutines.CoroutineExceptionHandler {}
+-keepclassmembers class kotlinx.coroutines.** {
+    volatile <fields>;
+}
+
+# ===============================================
+# Room Database
+# ===============================================
+-keep class * extends androidx.room.RoomDatabase
+-keep @androidx.room.Entity class *
+-dontwarn androidx.room.paging.**

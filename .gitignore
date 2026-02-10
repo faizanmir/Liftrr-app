@@ -1,0 +1,29 @@
+*.iml
+.gradle
+/local.properties
+local.properties
+.DS_Store
+/build
+/captures
+.externalNativeBuild
+.cxx
+
+# IDE
+.idea/
+
+# Claude Code
+.claude/
+
+# Signing keys
+keystore/
+
+# Build outputs
+app/build/
+app/release/
+
+# MediaPipe model files (large binaries)
+*.task
+app/src/main/assets/llm/
+
+# Google Services config (contains API keys)
+app/google-services.json
