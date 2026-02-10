@@ -48,6 +48,9 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import androidx.activity.compose.BackHandler
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.TextButton
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -60,8 +63,11 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import org.liftrr.domain.analytics.WorkoutReport
 import org.liftrr.domain.workout.RepData
 import org.liftrr.ml.ExerciseType
+import org.liftrr.ml.FramingFeedback
 import org.liftrr.ml.PoseDetectionResult
 import org.liftrr.ui.components.PoseCameraWithRecording
+import org.liftrr.ui.components.PoseSkeletonOverlay
+import org.liftrr.ui.components.PositioningGuideOverlay
 import org.liftrr.ui.screens.session.WorkoutMode
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -77,6 +83,27 @@ fun WorkoutScreen(
     val uiState by viewModel.uiState.collectAsState()
     var cameraSelector by remember { mutableStateOf(CameraSelector.DEFAULT_BACK_CAMERA) }
     val coroutineScope = rememberCoroutineScope()
+    var showPositioningGuide by remember { mutableStateOf(true) }
+    var showExitConfirmation by remember { mutableStateOf(false) }
+
+    // Intercept back gesture during recording to show confirmation
+    BackHandler(enabled = uiState.isRecording || uiState.repCount > 0) {
+        showExitConfirmation = true
+    }
+
+    // Auto-hide positioning guide when well-framed for 2 seconds
+    LaunchedEffect(uiState.poseQuality?.framingFeedback) {
+        if (uiState.poseQuality?.framingFeedback == FramingFeedback.WELL_FRAMED) {
+            delay(2000)
+            showPositioningGuide = false
+        }
+    }
+
+    // Hard timeout: hide guide after 10 seconds regardless
+    LaunchedEffect(Unit) {
+        delay(10_000)
+        showPositioningGuide = false
+    }
 
     // Set exercise type and weight when screen loads
     LaunchedEffect(exerciseType, weight) {
@@ -132,6 +159,20 @@ fun WorkoutScreen(
                 }, cameraSelector = cameraSelector, modifier = Modifier.fillMaxSize()
                 )
             }
+
+            // Pose skeleton overlay
+            PoseSkeletonOverlay(
+                pose = uiState.currentPose,
+                isFrontCamera = cameraSelector == CameraSelector.DEFAULT_FRONT_CAMERA,
+                modifier = Modifier.fillMaxSize()
+            )
+
+            // Positioning guide overlay (shows before recording starts)
+            PositioningGuideOverlay(
+                exerciseType = exerciseType,
+                isVisible = showPositioningGuide && !uiState.isRecording,
+                modifier = Modifier.fillMaxSize()
+            )
 
             // Dark overlay gradient for better text visibility
             Box(
@@ -279,6 +320,36 @@ fun WorkoutScreen(
                 }
             }
         }
+    }
+
+    // Exit confirmation dialog
+    if (showExitConfirmation) {
+        AlertDialog(
+            onDismissRequest = { showExitConfirmation = false },
+            title = { Text("Leave Workout?") },
+            text = {
+                Text(
+                    if (uiState.isRecording)
+                        "You have an active recording with ${uiState.repCount} reps. Leaving will discard your workout data."
+                    else
+                        "You have ${uiState.repCount} reps recorded. Leaving will discard your workout data."
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    showExitConfirmation = false
+                    if (uiState.isRecording) viewModel.stopRecording()
+                    onNavigateBack()
+                }) {
+                    Text("Leave", color = MaterialTheme.colorScheme.error)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showExitConfirmation = false }) {
+                    Text("Stay")
+                }
+            }
+        )
     }
 }
 

@@ -261,7 +261,6 @@ class WorkoutViewModel @Inject constructor(
      * Stops the pose detector to release resources
      */
     fun stopPoseDetection() {
-        poseDetector.stop()
         _uiState.update { it.copy(isPoseDetectionInitializing = false) }
     }
 

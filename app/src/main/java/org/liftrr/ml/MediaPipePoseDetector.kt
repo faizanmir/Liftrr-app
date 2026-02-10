@@ -50,8 +50,8 @@ class MediaPipePoseDetector @Inject constructor(
 
     override fun initialize(runningMode: RunningMode) {
         synchronized(lock) {
-            // Prevent re-initialization if already initialized
-            if (isInitialized && poseLandmarker != null) {
+            // Prevent re-initialization if already initialized and running
+            if (isInitialized && poseLandmarker != null && !isStopped) {
                 Log.d("MediaPipePoseDetector", "Already initialized, skipping")
                 return
             }

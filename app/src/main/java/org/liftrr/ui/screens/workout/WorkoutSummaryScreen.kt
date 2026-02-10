@@ -29,6 +29,7 @@ import androidx.compose.material.icons.filled.Psychology
 import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material.icons.filled.TrendingUp
 import androidx.compose.material3.*
+import androidx.activity.compose.BackHandler
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -73,6 +74,9 @@ fun WorkoutSummaryScreen(
     val aiRecommendations by viewModel.aiRecommendations.collectAsState()
     val motivationalMessage by viewModel.motivationalMessage.collectAsState()
     val isInitializing by viewModel.isInitializing.collectAsState()
+
+    // System back should go to Home (same as toolbar back)
+    BackHandler { onNavigateBack() }
 
     // Generate AI insights when screen loads (after initialization)
     LaunchedEffect(report, isInitializing) {

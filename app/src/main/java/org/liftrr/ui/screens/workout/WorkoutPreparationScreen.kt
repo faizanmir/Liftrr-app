@@ -1,21 +1,27 @@
 package org.liftrr.ui.screens.workout
 
+import androidx.camera.core.CameraSelector
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.Videocam
+import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.FitnessCenter
-import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.Videocam
 import androidx.compose.material.icons.outlined.FitnessCenter
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
@@ -24,43 +30,65 @@ import androidx.compose.ui.unit.dp
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.floatPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
+import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import org.liftrr.ml.ExerciseType
+import org.liftrr.ui.components.PoseCameraWithRecording
+import org.liftrr.ui.components.PoseSkeletonOverlay
 import org.liftrr.ui.screens.session.WorkoutMode
 
 private val android.content.Context.weightDataStore by preferencesDataStore(name = "workout_weight")
 private val LAST_WEIGHT_KEY = floatPreferencesKey("last_weight")
 
-/**
- * Workout Preparation Screen
- * Shows workout details and tips before starting camera recording
- */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun WorkoutPreparationScreen(
     workoutMode: WorkoutMode,
     exerciseType: ExerciseType,
     onNavigateBack: () -> Unit = {},
-    onStartRecording: (Float?) -> Unit = {}
+    onStartRecording: (Float?) -> Unit = {},
+    viewModel: CameraReadinessViewModel = hiltViewModel()
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
+    val readinessState by viewModel.readinessState.collectAsState()
+    val latestPose by viewModel.latestPose.collectAsState()
 
-    // Weight state
     var weightText by remember { mutableStateOf("") }
+    var showWarningDialog by remember { mutableStateOf(false) }
 
     // Load last used weight
     LaunchedEffect(Unit) {
         val lastWeight = context.weightDataStore.data.map { prefs ->
             prefs[LAST_WEIGHT_KEY]
         }.first()
-
-        lastWeight?.let {
-            weightText = it.toString()
-        }
+        lastWeight?.let { weightText = it.toString() }
     }
+
+    // Start readiness check
+    LaunchedEffect(exerciseType) {
+        viewModel.setExerciseType(exerciseType)
+        viewModel.startReadinessCheck()
+    }
+
+    DisposableEffect(Unit) {
+        onDispose { viewModel.stopReadinessCheck() }
+    }
+
+    val startWorkout: () -> Unit = {
+        val weight = weightText.toFloatOrNull()
+        if (weight != null && weight > 0) {
+            scope.launch {
+                context.weightDataStore.edit { prefs ->
+                    prefs[LAST_WEIGHT_KEY] = weight
+                }
+            }
+        }
+        onStartRecording(weight)
+    }
+
     Scaffold(
         containerColor = MaterialTheme.colorScheme.surface,
         topBar = {
@@ -81,83 +109,254 @@ fun WorkoutPreparationScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(padding)
-                .verticalScroll(rememberScrollState())
-                .padding(24.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(24.dp)
         ) {
-            // Header
-            Text(
-                text = "Ready to start?",
-                style = MaterialTheme.typography.headlineLarge,
-                fontWeight = FontWeight.Bold,
-                textAlign = TextAlign.Center
-            )
-
-            Text(
-                text = "Review your workout setup and prepare your space",
-                style = MaterialTheme.typography.bodyLarge,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                textAlign = TextAlign.Center
-            )
-
-            Spacer(modifier = Modifier.height(8.dp))
-
-            // Workout Details Card
-            WorkoutDetailsCard(
-                workoutMode = workoutMode,
-                exerciseType = exerciseType,
-                weightText = weightText,
-                onWeightChange = { weightText = it }
-            )
-
-            // Tips Card
-            WorkoutTipsCard(exerciseType = exerciseType)
-
-            Spacer(modifier = Modifier.height(32.dp))
-
-            // Start Workout Button
-            Button(
-                onClick = {
-                    // Parse and save weight
-                    val weight = weightText.toFloatOrNull()
-
-                    // Save weight to DataStore if valid
-                    if (weight != null && weight > 0) {
-                        scope.launch {
-                            context.weightDataStore.edit { prefs ->
-                                prefs[LAST_WEIGHT_KEY] = weight
-                            }
-                        }
-                    }
-
-                    onStartRecording(weight)
-                },
+            // Top: Live Camera Preview with Readiness Overlay
+            Box(
                 modifier = Modifier
+                    .weight(0.5f)
                     .fillMaxWidth()
-                    .height(64.dp),
-                shape = RoundedCornerShape(16.dp),
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = MaterialTheme.colorScheme.primary
-                )
+                    .clip(RoundedCornerShape(bottomStart = 24.dp, bottomEnd = 24.dp))
             ) {
-                Icon(
-                    imageVector = Icons.Default.FitnessCenter,
-                    contentDescription = null,
-                    modifier = Modifier.size(24.dp)
+                PoseCameraWithRecording(
+                    onFrameCaptured = { bitmap, timestamp, release ->
+                        viewModel.processFrame(bitmap, timestamp, release)
+                    },
+                    isRecording = false,
+                    cameraSelector = CameraSelector.DEFAULT_BACK_CAMERA,
+                    modifier = Modifier.fillMaxSize()
                 )
-                Spacer(modifier = Modifier.width(12.dp))
-                Text(
-                    text = "Start Workout",
-                    style = MaterialTheme.typography.titleLarge,
-                    fontWeight = FontWeight.Bold
+
+                // Pose skeleton overlay
+                PoseSkeletonOverlay(
+                    pose = latestPose,
+                    isFrontCamera = false,
+                    modifier = Modifier.fillMaxSize()
+                )
+
+                // Gradient overlay for readability
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(
+                            androidx.compose.ui.graphics.Brush.verticalGradient(
+                                colors = listOf(
+                                    androidx.compose.ui.graphics.Color.Transparent,
+                                    androidx.compose.ui.graphics.Color.Black.copy(alpha = 0.5f)
+                                ),
+                                startY = 0.5f
+                            )
+                        )
+                )
+
+                // Actionable feedback banner (top center)
+                readinessState.poseQuality?.actionableFeedback?.firstOrNull()?.let { msg ->
+                    Surface(
+                        modifier = Modifier
+                            .align(Alignment.TopCenter)
+                            .padding(12.dp),
+                        shape = RoundedCornerShape(12.dp),
+                        color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.9f),
+                        tonalElevation = 4.dp
+                    ) {
+                        Text(
+                            text = msg,
+                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp),
+                            style = MaterialTheme.typography.bodyMedium,
+                            fontWeight = FontWeight.Medium,
+                            color = MaterialTheme.colorScheme.onPrimaryContainer
+                        )
+                    }
+                }
+
+                // Readiness checklist overlay (bottom start)
+                ReadinessChecklist(
+                    state = readinessState,
+                    modifier = Modifier
+                        .align(Alignment.BottomStart)
+                        .padding(12.dp)
                 )
             }
 
-            // Bottom spacing for scrolling comfort
-            Spacer(modifier = Modifier.height(24.dp))
+            // Bottom: Workout details + start button
+            Column(
+                modifier = Modifier
+                    .weight(0.5f)
+                    .fillMaxWidth()
+                    .verticalScroll(rememberScrollState())
+                    .padding(20.dp),
+                verticalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
+                // Compact workout details
+                WorkoutDetailsCard(
+                    workoutMode = workoutMode,
+                    exerciseType = exerciseType,
+                    weightText = weightText,
+                    onWeightChange = { weightText = it }
+                )
+
+                Spacer(modifier = Modifier.weight(1f))
+
+                // Readiness-aware start button
+                ReadinessAwareStartButton(
+                    readinessState = readinessState,
+                    onStart = startWorkout,
+                    onStartAnyway = { showWarningDialog = true }
+                )
+
+                Spacer(modifier = Modifier.height(8.dp))
+            }
         }
     }
+
+    if (showWarningDialog) {
+        ReadinessWarningDialog(
+            state = readinessState,
+            onConfirm = {
+                showWarningDialog = false
+                startWorkout()
+            },
+            onDismiss = { showWarningDialog = false }
+        )
+    }
+}
+
+@Composable
+private fun ReadinessChecklist(
+    state: ReadinessState,
+    modifier: Modifier = Modifier
+) {
+    Surface(
+        modifier = modifier,
+        shape = RoundedCornerShape(16.dp),
+        color = MaterialTheme.colorScheme.surface.copy(alpha = 0.85f),
+        tonalElevation = 4.dp
+    ) {
+        Column(
+            modifier = Modifier.padding(12.dp),
+            verticalArrangement = Arrangement.spacedBy(6.dp)
+        ) {
+            ReadinessCheckItem("Framing", state.isFramingGood)
+            ReadinessCheckItem("Side view", state.isCameraAngleCorrect)
+            ReadinessCheckItem("Body visible", state.areLandmarksVisible)
+            ReadinessCheckItem("Lighting", state.isLightingAdequate)
+        }
+    }
+}
+
+@Composable
+private fun ReadinessCheckItem(label: String, passed: Boolean) {
+    val iconColor by animateColorAsState(
+        targetValue = if (passed) MaterialTheme.colorScheme.tertiary
+        else MaterialTheme.colorScheme.error,
+        animationSpec = tween(300),
+        label = "check_color"
+    )
+
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        Box(
+            modifier = Modifier
+                .size(20.dp)
+                .clip(CircleShape)
+                .background(iconColor.copy(alpha = 0.15f)),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(
+                imageVector = if (passed) Icons.Default.Check else Icons.Default.Close,
+                contentDescription = null,
+                modifier = Modifier.size(14.dp),
+                tint = iconColor
+            )
+        }
+        Text(
+            text = label,
+            style = MaterialTheme.typography.bodySmall,
+            fontWeight = if (passed) FontWeight.Medium else FontWeight.Normal,
+            color = if (passed) MaterialTheme.colorScheme.onSurface
+            else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+        )
+    }
+}
+
+@Composable
+private fun ReadinessAwareStartButton(
+    readinessState: ReadinessState,
+    onStart: () -> Unit,
+    onStartAnyway: () -> Unit
+) {
+    val allPassed = readinessState.allChecksPassed
+    val containerColor by animateColorAsState(
+        targetValue = if (allPassed) MaterialTheme.colorScheme.primary
+        else MaterialTheme.colorScheme.secondary,
+        animationSpec = tween(300),
+        label = "button_color"
+    )
+
+    Button(
+        onClick = if (allPassed) onStart else onStartAnyway,
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(60.dp),
+        shape = RoundedCornerShape(16.dp),
+        colors = ButtonDefaults.buttonColors(containerColor = containerColor)
+    ) {
+        Icon(
+            imageVector = Icons.Default.FitnessCenter,
+            contentDescription = null,
+            modifier = Modifier.size(22.dp)
+        )
+        Spacer(modifier = Modifier.width(10.dp))
+        Text(
+            text = if (allPassed) "Start Workout"
+            else "Start Anyway (${readinessState.passedCount}/4)",
+            style = MaterialTheme.typography.titleMedium,
+            fontWeight = FontWeight.Bold
+        )
+    }
+}
+
+@Composable
+private fun ReadinessWarningDialog(
+    state: ReadinessState,
+    onConfirm: () -> Unit,
+    onDismiss: () -> Unit
+) {
+    val failedChecks = buildList {
+        if (!state.isFramingGood) add("Framing — adjust your distance from camera")
+        if (!state.isCameraAngleCorrect) add("Camera angle — position camera to your side")
+        if (!state.areLandmarksVisible) add("Body visibility — ensure full body is in frame")
+        if (!state.isLightingAdequate) add("Lighting — move to a brighter area")
+    }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Setup Not Optimal") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text("The following checks haven't passed:")
+                failedChecks.forEach { check ->
+                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        Text("•", color = MaterialTheme.colorScheme.error)
+                        Text(check, style = MaterialTheme.typography.bodyMedium)
+                    }
+                }
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(
+                    "Form analysis may be less accurate.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onConfirm) { Text("Start Anyway") }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text("Fix Setup") }
+        }
+    )
 }
 
 @Composable
@@ -206,7 +405,7 @@ private fun WorkoutDetailsCard(
                 }
             }
 
-            Divider()
+            HorizontalDivider()
 
             // Mode
             Row(
@@ -237,7 +436,7 @@ private fun WorkoutDetailsCard(
                 }
             }
 
-            Divider()
+            HorizontalDivider()
 
             // Weight (Optional)
             Row(
@@ -248,7 +447,9 @@ private fun WorkoutDetailsCard(
                     imageVector = Icons.Outlined.FitnessCenter,
                     contentDescription = null,
                     tint = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.size(28.dp).padding(top = 8.dp)
+                    modifier = Modifier
+                        .size(28.dp)
+                        .padding(top = 8.dp)
                 )
                 Column(
                     modifier = Modifier.weight(1f),
@@ -279,81 +480,6 @@ private fun WorkoutDetailsCard(
                         text = "Leave empty to track reps only",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.6f)
-                    )
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun WorkoutTipsCard(exerciseType: ExerciseType) {
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.secondaryContainer
-        )
-    ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(20.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
-        ) {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                Icon(
-                    imageVector = Icons.Default.Info,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.secondary,
-                    modifier = Modifier.size(24.dp)
-                )
-                Text(
-                    text = "Setup Tips",
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.onSecondaryContainer
-                )
-            }
-
-            val tips = when (exerciseType) {
-                ExerciseType.SQUAT -> listOf(
-                    "Position camera to show full body from side",
-                    "Ensure good lighting in your space",
-                    "Clear area around you for movement",
-                    "Camera should capture from head to feet"
-                )
-                ExerciseType.DEADLIFT -> listOf(
-                    "Position camera to show full body from side",
-                    "Stand about 6-8 feet from camera",
-                    "Ensure hips, knees, and ankles are visible",
-                    "Keep the bar/weight in frame"
-                )
-                ExerciseType.BENCH_PRESS -> listOf(
-                    "Position camera to show upper body and arms",
-                    "Side angle works best for form analysis",
-                    "Ensure shoulders and elbows are visible",
-                    "Make sure lighting is adequate"
-                )
-            }
-
-            tips.forEach { tip ->
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    Text(
-                        text = "•",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSecondaryContainer
-                    )
-                    Text(
-                        text = tip,
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSecondaryContainer
                     )
                 }
             }

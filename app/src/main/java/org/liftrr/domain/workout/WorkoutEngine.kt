@@ -111,16 +111,24 @@ class WorkoutEngine {
         val repCompleted = exercise.updateRepCount(pose)
         if (repCompleted) {
             repCount++
-            // Check both pose quality AND exercise-specific form validation
+            // Use weighted form score from exercise-specific validation
+            val exerciseFormScore = exercise.formScore()
             val hasGoodPoseQuality = quality.overallConfidence >= MIN_POSE_QUALITY
-            val hasGoodExerciseForm = exercise.hadGoodForm()
-            val isGoodForm = hasGoodPoseQuality && hasGoodExerciseForm
+            // Blend pose quality with exercise form score
+            val blendedScore = if (hasGoodPoseQuality) {
+                exerciseFormScore
+            } else {
+                // Reduce score if pose quality is low (landmarks not reliable)
+                exerciseFormScore * (quality.overallConfidence / MIN_POSE_QUALITY).coerceIn(0.5f, 1f)
+            }
+            val isGoodForm = blendedScore >= 60f
 
             val repData = RepData(
                 repNumber = repCount,
                 timestamp = System.currentTimeMillis(),
                 poseQuality = quality.overallConfidence,
-                isGoodForm = isGoodForm
+                isGoodForm = isGoodForm,
+                formScore = blendedScore
             )
 
             reps.add(repData)
