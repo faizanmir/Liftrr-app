@@ -3,7 +3,6 @@ package org.liftrr.ui.screens.workout
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -26,6 +25,7 @@ import org.liftrr.ml.PoseDetectionResult
 import org.liftrr.ml.PoseDetector
 import org.liftrr.ml.PoseQuality
 import org.liftrr.ui.screens.session.WorkoutMode
+import org.liftrr.utils.DispatcherProvider
 import javax.inject.Inject
 
 /**
@@ -55,7 +55,8 @@ data class WorkoutUiState(
 class WorkoutViewModel @Inject constructor(
     val poseDetector: PoseDetector,
     private val workoutReportHolder: org.liftrr.domain.workout.WorkoutReportHolder,
-    private val workoutRepository: WorkoutRepository
+    private val workoutRepository: WorkoutRepository,
+    private val dispatchers: DispatcherProvider
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(
@@ -87,7 +88,7 @@ class WorkoutViewModel @Inject constructor(
 
         viewModelScope.launch {
             try {
-                withContext(Dispatchers.IO) {
+                withContext(dispatchers.io) {
                     poseDetector.initialize()
                 }
                 isPoseDetectorInitialized = true
@@ -104,7 +105,7 @@ class WorkoutViewModel @Inject constructor(
                 if (!isPoseDetectorInitialized) {
                     _uiState.update { it.copy(isPoseDetectionInitializing = true) }
 
-                    withContext(Dispatchers.IO) {
+                    withContext(dispatchers.io) {
                         poseDetector.initialize()
                     }
                     isPoseDetectorInitialized = true
@@ -114,11 +115,11 @@ class WorkoutViewModel @Inject constructor(
 
                 poseDetector.poseResults
                     .onEach { result ->
-                        withContext(Dispatchers.Default) {
+                        withContext(dispatchers.default) {
                             val workoutState = workoutEngine.processPoseResult(result)
                             val repStats = workoutEngine.getRepStats()
 
-                            withContext(Dispatchers.Main) {
+                            withContext(dispatchers.main) {
                                 _uiState.update {
                                     it.copy(
                                         currentPose = workoutState.currentPose,
@@ -179,7 +180,7 @@ class WorkoutViewModel @Inject constructor(
         weight = w
     }
 
-    suspend fun finishWorkout(): WorkoutReport? = withContext(Dispatchers.Default) {
+    suspend fun finishWorkout(): WorkoutReport? = withContext(dispatchers.default) {
         android.util.Log.d("WorkoutViewModel", "finishWorkout called. videoUri: $videoUri")
 
         val session = workoutEngine.endSession() ?: return@withContext null
@@ -188,7 +189,7 @@ class WorkoutViewModel @Inject constructor(
         lastWorkoutReport = report
         workoutReportHolder.setReport(report)
 
-        withContext(Dispatchers.IO) {
+        withContext(dispatchers.io) {
             val repDataList = report.repAnalyses.map { repAnalysis ->
                 RepDataDto(
                     repNumber = repAnalysis.repNumber,

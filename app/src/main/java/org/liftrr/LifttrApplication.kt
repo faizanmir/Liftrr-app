@@ -7,8 +7,6 @@ import androidx.lifecycle.LifecycleOwner
 import androidx.lifecycle.ProcessLifecycleOwner
 import dagger.hilt.android.HiltAndroidApp
 import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
 import org.liftrr.ml.PoseDetector
 import javax.inject.Inject
@@ -19,7 +17,8 @@ class LifttrApplication : Application() {
     @Inject
     lateinit var poseDetector: PoseDetector
 
-    private val appScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    @Inject
+    lateinit var appScope: CoroutineScope
 
     override fun onCreate() {
         super.onCreate()

@@ -4,7 +4,6 @@ import android.graphics.Bitmap
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -22,6 +21,7 @@ import org.liftrr.ml.PoseDetectionResult
 import org.liftrr.ml.PoseDetector
 import org.liftrr.ml.PoseQuality
 import org.liftrr.ml.PoseQualityAnalyzer
+import org.liftrr.utils.DispatcherProvider
 import javax.inject.Inject
 
 data class ReadinessState(
@@ -45,7 +45,8 @@ data class ReadinessState(
 
 @HiltViewModel
 class CameraReadinessViewModel @Inject constructor(
-    private val poseDetector: PoseDetector
+    private val poseDetector: PoseDetector,
+    private val dispatchers: DispatcherProvider
 ) : ViewModel() {
 
     private val _readinessState = MutableStateFlow(ReadinessState())
@@ -63,7 +64,7 @@ class CameraReadinessViewModel @Inject constructor(
 
     fun startReadinessCheck() {
         viewModelScope.launch {
-            withContext(Dispatchers.IO) {
+            withContext(dispatchers.io) {
                 poseDetector.initialize()
             }
             _readinessState.update { it.copy(isDetectorReady = true) }
