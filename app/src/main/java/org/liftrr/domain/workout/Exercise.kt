@@ -84,7 +84,7 @@ class AngleSmoother(private val windowSize: Int = 3) {
         index = (index + 1) % windowSize
         if (count < windowSize) count++
         var sum = 0f
-        for (i in 0..count) sum += buffer[i]
+        for (i in 0 until count) sum += buffer[i]
         return sum / count
     }
 
