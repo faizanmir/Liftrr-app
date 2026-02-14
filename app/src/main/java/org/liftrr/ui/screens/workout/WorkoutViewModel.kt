@@ -91,6 +91,7 @@ class WorkoutViewModel @Inject constructor(
     // Store latest camera frame for key frame capture
     private var latestFrameBitmap: Bitmap? = null
     private var latestFrameTimestamp: Long = 0L
+    private val bitmapLock = Any() // Synchronization lock for bitmap access
 
     // Track which phases have been captured for the current rep
     private val capturedPhasesThisRep = mutableSetOf<MovementPhase>()
@@ -225,11 +226,15 @@ class WorkoutViewModel @Inject constructor(
      * Called from UI when camera provides a new frame
      */
     fun updateLatestFrame(bitmap: Bitmap, timestamp: Long) {
-        // Recycle old bitmap
-        latestFrameBitmap?.recycle()
-        // Make a copy since the original will be recycled by the pool
-        latestFrameBitmap = bitmap.copy(Bitmap.Config.ARGB_8888, false)
-        latestFrameTimestamp = timestamp
+        synchronized(bitmapLock) {
+            // Recycle old bitmap safely
+            val oldBitmap = latestFrameBitmap
+            // Make a copy since the original will be recycled by the pool
+            latestFrameBitmap = bitmap.copy(Bitmap.Config.ARGB_8888, false)
+            latestFrameTimestamp = timestamp
+            // Recycle after updating reference to avoid race condition
+            oldBitmap?.recycle()
+        }
     }
 
     /**
@@ -242,8 +247,6 @@ class WorkoutViewModel @Inject constructor(
         formScore: Float,
         formFeedback: String
     ) {
-        val bitmap = latestFrameBitmap ?: return
-
         // Detect current movement phase
         val currentPhase = workoutEngine.getCurrentExercise()?.detectMovementPhase(result) ?: return
 
@@ -258,6 +261,12 @@ class WorkoutViewModel @Inject constructor(
 
         // Only capture if this is an important phase and we haven't captured it yet for this rep
         if (currentPhase in importantPhases && currentPhase !in capturedPhasesThisRep) {
+            // Get bitmap and timestamp atomically
+            val (bitmap, timestamp) = synchronized(bitmapLock) {
+                val bmp = latestFrameBitmap ?: return
+                Pair(bmp, latestFrameTimestamp)
+            }
+
             // Determine form issues from feedback
             val formIssues = if (formScore < 0.7f) {
                 listOf(formFeedback)
@@ -268,7 +277,7 @@ class WorkoutViewModel @Inject constructor(
             // Capture this frame for later processing
             keyFrameCapture.captureFrame(
                 bitmap = bitmap,
-                timestamp = latestFrameTimestamp,
+                timestamp = timestamp,
                 repNumber = repNumber,
                 poseData = result,
                 formScore = formScore,
@@ -345,9 +354,11 @@ class WorkoutViewModel @Inject constructor(
             workoutRepository.saveWorkout(entity)
         }
 
-        // Clean up latest frame bitmap
-        latestFrameBitmap?.recycle()
-        latestFrameBitmap = null
+        // Clean up latest frame bitmap safely
+        synchronized(bitmapLock) {
+            latestFrameBitmap?.recycle()
+            latestFrameBitmap = null
+        }
 
         report
     }
