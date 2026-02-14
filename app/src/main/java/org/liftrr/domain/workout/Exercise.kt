@@ -15,12 +15,28 @@ interface Exercise {
 /**
  * Helper object for calculating angles using both sides of the body when available.
  * Falls back to the more visible side if one side has poor visibility.
+ *
+ * This is especially useful when:
+ * - Camera is positioned to one side (one leg may be occluded)
+ * - User is partially out of frame
+ * - Lighting conditions affect landmark detection on one side
  */
 object BilateralAngleCalculator {
-    private const val MIN_VISIBILITY_THRESHOLD = 0.5f
+    // Lower threshold (30%) to handle partially occluded poses
+    // This allows tracking even when one side is partially hidden
+    private const val MIN_VISIBILITY_THRESHOLD = 0.3f
+
+    // Minimum landmarks needed - if we have at least this many, attempt tracking
+    private const val MIN_LANDMARK_CONFIDENCE = 0.2f
 
     /**
      * Calculate angle using both sides and average them, or use the more visible side.
+     *
+     * Strategy:
+     * 1. If both sides are clearly visible (>30% confidence): average them
+     * 2. If only one side is clearly visible: use that side
+     * 3. If both have poor visibility: use whichever is better (even if low confidence)
+     * 4. Returns null only if no landmarks are detected at all
      */
     fun calculateBilateralAngle(
         leftPoint1: NormalizedLandmark?,
@@ -42,20 +58,25 @@ object BilateralAngleCalculator {
         } else null
 
         return when {
-            // Both sides visible and good quality - average them
+            // Both sides visible and good quality - average them for best accuracy
             leftAngle != null && rightAngle != null &&
                 leftVisibility >= MIN_VISIBILITY_THRESHOLD &&
                 rightVisibility >= MIN_VISIBILITY_THRESHOLD -> {
                 (leftAngle + rightAngle) / 2f
             }
-            // Only left side is usable
+            // Only left side meets quality threshold
             leftAngle != null && leftVisibility >= MIN_VISIBILITY_THRESHOLD -> leftAngle
-            // Only right side is usable
+            // Only right side meets quality threshold
             rightAngle != null && rightVisibility >= MIN_VISIBILITY_THRESHOLD -> rightAngle
-            // Neither side meets threshold, use whichever is better
-            leftVisibility > rightVisibility && leftAngle != null -> leftAngle
-            rightAngle != null -> rightAngle
+            // Both have low visibility - use whichever is better (handles occlusion cases)
+            // This ensures we can still track even when one leg is hidden
+            leftVisibility > rightVisibility && leftAngle != null &&
+                leftVisibility >= MIN_LANDMARK_CONFIDENCE -> leftAngle
+            rightAngle != null && rightVisibility >= MIN_LANDMARK_CONFIDENCE -> rightAngle
+            // Last resort: use any available angle even with very low confidence
             leftAngle != null -> leftAngle
+            rightAngle != null -> rightAngle
+            // No landmarks detected at all
             else -> null
         }
     }
@@ -83,6 +104,9 @@ class AngleSmoother(private val windowSize: Int = 3) {
         buffer[index] = value
         index = (index + 1) % windowSize
         if (count < windowSize) count++
+
+        if (count == 0) return value
+
         var sum = 0f
         for (i in 0 until count) sum += buffer[i]
         return sum / count
