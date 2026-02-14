@@ -75,23 +75,28 @@ class BenchPressExercise : Exercise {
     override fun updateRepCount(pose: PoseDetectionResult.Success): Boolean {
         val leftWrist = pose.getLandmark(PoseLandmarks.LEFT_WRIST)
         val leftElbow = pose.getLandmark(PoseLandmarks.LEFT_ELBOW)
+        val rightWrist = pose.getLandmark(PoseLandmarks.RIGHT_WRIST)
         val rightElbow = pose.getLandmark(PoseLandmarks.RIGHT_ELBOW)
         val leftShoulder = pose.getLandmark(PoseLandmarks.LEFT_SHOULDER)
         val rightShoulder = pose.getLandmark(PoseLandmarks.RIGHT_SHOULDER)
 
-        if (leftWrist == null || leftElbow == null || leftShoulder == null || rightShoulder == null) {
+        val elbowAngle = BilateralAngleCalculator.calculateBilateralAngle(
+            leftShoulder, leftElbow, leftWrist,
+            rightShoulder, rightElbow, rightWrist
+        )
+
+        if (elbowAngle == null) {
             bottomFrameCount = 0
             return false
         }
 
-        val elbowAngle = PoseAnalyzer.calculateAngle(leftShoulder, leftElbow, leftWrist)
         val smoothedElbow = elbowAngleSmoother.add(elbowAngle)
         lastSmoothedElbowAngle = smoothedElbow
 
         if (smoothedElbow < repMinElbowAngle) repMinElbowAngle = smoothedElbow
         if (smoothedElbow > repMaxLockoutAngle) repMaxLockoutAngle = smoothedElbow
 
-        if (rightElbow != null) {
+        if (leftElbow != null && rightElbow != null && leftShoulder != null && rightShoulder != null) {
             val shoulderWidth = abs(leftShoulder.x() - rightShoulder.x())
             val elbowWidth = abs(leftElbow.x() - rightElbow.x())
             val flareRatio = if (shoulderWidth > 0.01f) elbowWidth / shoulderWidth else 1f

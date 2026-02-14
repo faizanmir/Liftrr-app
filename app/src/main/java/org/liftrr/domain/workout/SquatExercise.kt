@@ -78,44 +78,57 @@ class SquatExercise : Exercise {
         val leftKnee = pose.getLandmark(PoseLandmarks.LEFT_KNEE)
         val rightKnee = pose.getLandmark(PoseLandmarks.RIGHT_KNEE)
         val leftAnkle = pose.getLandmark(PoseLandmarks.LEFT_ANKLE)
+        val rightAnkle = pose.getLandmark(PoseLandmarks.RIGHT_ANKLE)
         val leftShoulder = pose.getLandmark(PoseLandmarks.LEFT_SHOULDER)
+        val rightShoulder = pose.getLandmark(PoseLandmarks.RIGHT_SHOULDER)
 
         if (leftHip == null || rightHip == null || leftKnee == null || rightKnee == null) {
             bottomFrameCount = 0
             return false
         }
 
-        val canUseAngle = leftAnkle != null
+        val canUseAngle = leftAnkle != null || rightAnkle != null
         usingAngleMode = canUseAngle
 
         val isAtBottomPosition: Boolean
         val isAtTopPosition: Boolean
 
         if (canUseAngle) {
-            val kneeAngle = PoseAnalyzer.calculateAngle(leftHip, leftKnee, leftAnkle)
-            val smoothedKnee = kneeAngleSmoother.add(kneeAngle)
-            lastSmoothedKneeAngle = smoothedKnee
+            val kneeAngle = BilateralAngleCalculator.calculateBilateralAngle(
+                leftHip, leftKnee, leftAnkle,
+                rightHip, rightKnee, rightAnkle
+            )
 
-            if (smoothedKnee < repMinKneeAngle) repMinKneeAngle = smoothedKnee
+            if (kneeAngle != null) {
+                val smoothedKnee = kneeAngleSmoother.add(kneeAngle)
+                lastSmoothedKneeAngle = smoothedKnee
 
-            if (leftShoulder != null) {
-                val hipAngle = PoseAnalyzer.calculateAngle(leftShoulder, leftHip, leftKnee)
+                if (smoothedKnee < repMinKneeAngle) repMinKneeAngle = smoothedKnee
+            }
+
+            val hipAngle = BilateralAngleCalculator.calculateBilateralAngle(
+                leftShoulder, leftHip, leftKnee,
+                rightShoulder, rightHip, rightKnee
+            )
+
+            if (hipAngle != null) {
                 val smoothedHip = hipAngleSmoother.add(hipAngle)
                 lastSmoothedHipAngle = smoothedHip
                 val forwardLean = (90f - smoothedHip).coerceAtLeast(0f)
                 if (forwardLean > repMaxForwardLean) repMaxForwardLean = forwardLean
             }
 
-            val rightAnkle = pose.getLandmark(PoseLandmarks.RIGHT_ANKLE)
-            if (rightAnkle != null) {
+            if (leftAnkle != null) {
                 val leftValgus = leftAnkle.x() - leftKnee.x()
+                if (leftValgus > repMaxKneeValgus) repMaxKneeValgus = leftValgus
+            }
+            if (rightAnkle != null) {
                 val rightValgus = rightKnee.x() - rightAnkle.x()
-                val maxValgus = maxOf(leftValgus, rightValgus, 0f)
-                if (maxValgus > repMaxKneeValgus) repMaxKneeValgus = maxValgus
+                if (rightValgus > repMaxKneeValgus) repMaxKneeValgus = rightValgus
             }
 
-            isAtBottomPosition = smoothedKnee < BOTTOM_ENTRY_ANGLE
-            isAtTopPosition = smoothedKnee > BOTTOM_EXIT_ANGLE
+            isAtBottomPosition = lastSmoothedKneeAngle < BOTTOM_ENTRY_ANGLE
+            isAtTopPosition = lastSmoothedKneeAngle > BOTTOM_EXIT_ANGLE
         } else {
             val avgHipY = (leftHip.y() + rightHip.y()) / 2
             val avgKneeY = (leftKnee.y() + rightKnee.y()) / 2

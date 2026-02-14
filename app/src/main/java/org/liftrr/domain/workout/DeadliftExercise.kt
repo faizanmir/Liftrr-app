@@ -1,5 +1,6 @@
 package org.liftrr.domain.workout
 
+import com.google.mediapipe.tasks.components.containers.NormalizedLandmark
 import org.liftrr.ml.PoseAnalyzer
 import org.liftrr.ml.PoseDetectionResult
 import org.liftrr.ml.PoseLandmarks
@@ -71,20 +72,30 @@ class DeadliftExercise : Exercise {
         val leftShoulder = pose.getLandmark(PoseLandmarks.LEFT_SHOULDER)
         val leftHip = pose.getLandmark(PoseLandmarks.LEFT_HIP)
         val leftKnee = pose.getLandmark(PoseLandmarks.LEFT_KNEE)
+        val rightShoulder = pose.getLandmark(PoseLandmarks.RIGHT_SHOULDER)
+        val rightHip = pose.getLandmark(PoseLandmarks.RIGHT_HIP)
+        val rightKnee = pose.getLandmark(PoseLandmarks.RIGHT_KNEE)
 
-        if (leftShoulder == null || leftHip == null || leftKnee == null) {
+        val hipAngle = BilateralAngleCalculator.calculateBilateralAngle(
+            leftShoulder, leftHip, leftKnee,
+            rightShoulder, rightHip, rightKnee
+        )
+
+        if (hipAngle == null) {
             bottomFrameCount = 0
             return false
         }
 
-        val hipAngle = PoseAnalyzer.calculateAngle(leftShoulder, leftHip, leftKnee)
         val smoothedHip = hipAngleSmoother.add(hipAngle)
         lastSmoothedHipAngle = smoothedHip
 
         if (smoothedHip < repMinHipAngle) repMinHipAngle = smoothedHip
         if (smoothedHip > repMaxLockoutAngle) repMaxLockoutAngle = smoothedHip
 
-        val trunkRatio = calculateTrunkAlignment(leftShoulder, leftHip, leftKnee)
+        val trunkRatio = calculateBilateralTrunkAlignment(
+            leftShoulder, leftHip, leftKnee,
+            rightShoulder, rightHip, rightKnee
+        )
         val smoothedTrunk = trunkSmoother.add(trunkRatio)
         lastSmoothedTrunkRatio = smoothedTrunk
         if (smoothedTrunk < repMinTrunkAlignment) repMinTrunkAlignment = smoothedTrunk
@@ -126,10 +137,34 @@ class DeadliftExercise : Exercise {
 
     override fun formScore(): Float = lastFormScore
 
+    private fun calculateBilateralTrunkAlignment(
+        leftShoulder: NormalizedLandmark?,
+        leftHip: NormalizedLandmark?,
+        leftKnee: NormalizedLandmark?,
+        rightShoulder: NormalizedLandmark?,
+        rightHip: NormalizedLandmark?,
+        rightKnee: NormalizedLandmark?
+    ): Float {
+        val leftRatio = if (leftShoulder != null && leftHip != null && leftKnee != null) {
+            calculateTrunkAlignment(leftShoulder, leftHip, leftKnee)
+        } else null
+
+        val rightRatio = if (rightShoulder != null && rightHip != null && rightKnee != null) {
+            calculateTrunkAlignment(rightShoulder, rightHip, rightKnee)
+        } else null
+
+        return when {
+            leftRatio != null && rightRatio != null -> (leftRatio + rightRatio) / 2f
+            leftRatio != null -> leftRatio
+            rightRatio != null -> rightRatio
+            else -> 1f
+        }
+    }
+
     private fun calculateTrunkAlignment(
-        shoulder: com.google.mediapipe.tasks.components.containers.NormalizedLandmark,
-        hip: com.google.mediapipe.tasks.components.containers.NormalizedLandmark,
-        knee: com.google.mediapipe.tasks.components.containers.NormalizedLandmark
+        shoulder: NormalizedLandmark,
+        hip: NormalizedLandmark,
+        knee: NormalizedLandmark
     ): Float {
         val shoulderToHipY = abs(shoulder.y() - hip.y())
         val hipToKneeY = abs(hip.y() - knee.y())

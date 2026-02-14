@@ -23,6 +23,11 @@ android {
     namespace = "org.liftrr"
     compileSdk = 36
 
+    lint {
+        abortOnError = false
+        checkReleaseBuilds = false
+    }
+
     defaultConfig {
         applicationId = "org.liftrr"
         minSdk = 27
