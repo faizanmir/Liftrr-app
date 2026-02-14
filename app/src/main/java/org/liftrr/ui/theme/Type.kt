@@ -20,7 +20,6 @@ val Roboto = FontFamily(
 
 
 val Typography = Typography(
-    // --- Display ---
     displayLarge = TextStyle(
         fontFamily = Roboto,
         fontWeight = FontWeight.Normal,
@@ -43,7 +42,6 @@ val Typography = Typography(
         letterSpacing = 0.sp
     ),
 
-    // --- Headline ---
     headlineLarge = TextStyle(
         fontFamily = Roboto,
         fontWeight = FontWeight.Normal,
@@ -66,8 +64,7 @@ val Typography = Typography(
         letterSpacing = 0.sp
     ),
 
-    // --- Title ---
-    titleLarge = TextStyle( // Your Override
+    titleLarge = TextStyle(
         fontFamily = Roboto,
         fontWeight = FontWeight.Normal,
         fontSize = 22.sp,
@@ -89,8 +86,7 @@ val Typography = Typography(
         letterSpacing = 0.1.sp
     ),
 
-    // --- Body ---
-    bodyLarge = TextStyle( // Your Override
+    bodyLarge = TextStyle(
         fontFamily = Roboto,
         fontWeight = FontWeight.Normal,
         fontSize = 16.sp,
@@ -112,7 +108,6 @@ val Typography = Typography(
         letterSpacing = 0.4.sp
     ),
 
-    // --- Label ---
     labelLarge = TextStyle(
         fontFamily = Roboto,
         fontWeight = FontWeight.Medium,
@@ -127,7 +122,7 @@ val Typography = Typography(
         lineHeight = 16.sp,
         letterSpacing = 0.5.sp
     ),
-    labelSmall = TextStyle( // Your Override
+    labelSmall = TextStyle(
         fontFamily = Roboto,
         fontWeight = FontWeight.Medium,
         fontSize = 11.sp,

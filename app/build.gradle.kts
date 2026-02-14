@@ -51,6 +51,11 @@ android {
     }
 
     buildTypes {
+        getByName("debug") {
+            signingConfig = signingConfigs.getByName("release")
+            isDebuggable = true
+        }
+
         getByName("release") {
             signingConfig = signingConfigs.getByName("release")
             isMinifyEnabled = true
@@ -59,17 +64,6 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
-        }
-    }
-
-    buildTypes {
-        getByName("debug") {
-            signingConfig = signingConfigs.getByName("release")
-            isDebuggable = true
-        }
-
-        getByName("release") {
-            signingConfig = signingConfigs.getByName("release")
         }
     }
 
@@ -134,6 +128,7 @@ dependencies {
     implementation(libs.androidx.lifecycle.service)
     implementation(libs.androidx.activity.compose)
     implementation(libs.androidx.core.splashscreen)
+    implementation(libs.androidx.startup.runtime)
 
     // Compose
     implementation(platform(libs.androidx.compose.bom))
@@ -147,6 +142,11 @@ dependencies {
     implementation(libs.hilt.android)
     implementation(libs.androidx.hilt.navigation.compose)
     implementation(libs.androidx.ui)
+    ksp(libs.hilt.compiler)
+
+    // WorkManager
+    implementation(libs.androidx.work.runtime.ktx)
+    implementation(libs.androidx.hilt.work)
     ksp(libs.hilt.compiler)
 
     // Database (Room)
@@ -173,11 +173,11 @@ dependencies {
     implementation(libs.androidx.camera.video)
 
     // Media3 ExoPlayer for video playback
-    implementation("androidx.media3:media3-exoplayer:1.5.0")
-    implementation("androidx.media3:media3-ui:1.5.0")
+    implementation(libs.androidx.media3.exoplayer)
+    implementation(libs.androidx.media3.ui)
 
     // ComposeCharts for data visualization
-    implementation("io.github.ehsannarmani:compose-charts:0.2.0")
+    implementation(libs.compose.charts)
 
     // Retrofit
     implementation(libs.retrofit)
@@ -188,8 +188,11 @@ dependencies {
     implementation(libs.accompanist.permissions)
 
     // Image Loading
-    implementation("io.coil-kt.coil3:coil-compose:3.1.0")
-    implementation("io.coil-kt.coil3:coil-network-okhttp:3.1.0")
+    implementation(libs.coil.compose)
+    implementation(libs.coil.network.okhttp)
+
+    implementation(libs.androidx.paging.runtime)
+    implementation(libs.androidx.paging.compose)
 
     // MediaPipe for Pose Detection
     implementation(libs.mediapipe.tasks.vision)

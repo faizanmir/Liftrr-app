@@ -56,7 +56,7 @@ class WorkoutViewModel @Inject constructor(
     val poseDetector: PoseDetector,
     private val workoutReportHolder: org.liftrr.domain.workout.WorkoutReportHolder,
     private val workoutRepository: WorkoutRepository,
-    private val dispatchers: DispatcherProvider
+    val dispatchers: DispatcherProvider
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(
@@ -196,7 +196,9 @@ class WorkoutViewModel @Inject constructor(
                     quality = repAnalysis.quality,
                     isGoodForm = repAnalysis.isGoodForm,
                     durationMs = repAnalysis.tempo?.totalMs ?: 0L,
-                    timestamp = System.currentTimeMillis()
+                    timestamp = System.currentTimeMillis(),
+                    depth = repAnalysis.depth,
+                    formIssues = repAnalysis.formIssues
                 )
             }
 

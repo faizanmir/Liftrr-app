@@ -2,12 +2,6 @@ package org.liftrr.domain.analytics
 
 import org.liftrr.ml.ExerciseType
 
-/**
- * Comprehensive workout report with all analysis results
- *
- * Generated after a workout session completes.
- * Contains high-level metrics and detailed per-rep analysis.
- */
 data class WorkoutReport(
     val sessionId: String,
     val exerciseType: ExerciseType,

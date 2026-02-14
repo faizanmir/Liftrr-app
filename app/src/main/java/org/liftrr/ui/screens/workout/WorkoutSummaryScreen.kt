@@ -467,46 +467,161 @@ private fun RepAnalysisCard(rep: RepAnalysis) {
             }
         )
     ) {
-        Row(
+        Column(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(16.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
+            verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            Column {
-                Text(
-                    text = "Rep #${rep.repNumber}",
-                    style = MaterialTheme.typography.titleSmall,
-                    fontWeight = FontWeight.Bold
-                )
-                Text(
-                    text = if (rep.isGoodForm) "Good Form" else "Needs Work",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = if (rep.isGoodForm) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column {
+                    Text(
+                        text = "Rep #${rep.repNumber}",
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Text(
+                        text = if (rep.isGoodForm) "Good Form" else "Needs Work",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = if (rep.isGoodForm) {
+                            MaterialTheme.colorScheme.tertiary
+                        } else {
+                            MaterialTheme.colorScheme.error
+                        }
+                    )
+                }
+
+                Icon(
+                    imageVector = if (rep.isGoodForm) Icons.Default.CheckCircle else Icons.Default.Error,
+                    contentDescription = null,
+                    tint = if (rep.isGoodForm) {
                         MaterialTheme.colorScheme.tertiary
                     } else {
                         MaterialTheme.colorScheme.error
                     }
                 )
+            }
+
+            // Show metrics
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
                 rep.depth?.let {
+                    MetricChip(
+                        label = "Depth",
+                        value = "${it.roundToInt()}°"
+                    )
+                }
+                rep.tempo?.let {
+                    MetricChip(
+                        label = "Time",
+                        value = "%.1fs".format(it.totalMs / 1000f)
+                    )
+                }
+                MetricChip(
+                    label = "Quality",
+                    value = "${(rep.quality * 100).roundToInt()}%"
+                )
+            }
+
+            // Show form feedback
+            if (rep.formIssues.isNotEmpty()) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(
+                            if (rep.isGoodForm) {
+                                MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.3f)
+                            } else {
+                                MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.3f)
+                            }
+                        )
+                        .padding(12.dp),
+                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    rep.formIssues.forEach { issue ->
+                        Row(
+                            verticalAlignment = Alignment.Top,
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            Text(
+                                text = if (rep.isGoodForm) "✓" else "•",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = if (rep.isGoodForm) {
+                                    MaterialTheme.colorScheme.tertiary
+                                } else {
+                                    MaterialTheme.colorScheme.error
+                                }
+                            )
+                            Text(
+                                text = issue,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = if (rep.isGoodForm) {
+                                    MaterialTheme.colorScheme.onTertiaryContainer
+                                } else {
+                                    MaterialTheme.colorScheme.onErrorContainer
+                                }
+                            )
+                        }
+                    }
+                }
+            } else if (rep.isGoodForm) {
+                // Show positive feedback for good reps with no issues
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.3f))
+                        .padding(12.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
                     Text(
-                        text = "Depth: ${it.roundToInt()}°",
-                        style = MaterialTheme.typography.bodySmall
+                        text = "✓",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.tertiary
+                    )
+                    Text(
+                        text = "Excellent form maintained",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onTertiaryContainer
                     )
                 }
             }
-
-            Icon(
-                imageVector = if (rep.isGoodForm) Icons.Default.CheckCircle else Icons.Default.Error,
-                contentDescription = null,
-                tint = if (rep.isGoodForm) {
-                    MaterialTheme.colorScheme.tertiary
-                } else {
-                    MaterialTheme.colorScheme.error
-                }
-            )
         }
+    }
+}
+
+@Composable
+private fun MetricChip(
+    label: String,
+    value: String
+) {
+    Row(
+        modifier = Modifier
+            .clip(RoundedCornerShape(12.dp))
+            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
+            .padding(horizontal = 10.dp, vertical = 6.dp),
+        horizontalArrangement = Arrangement.spacedBy(4.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(
+            text = label,
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        Text(
+            text = value,
+            style = MaterialTheme.typography.labelSmall,
+            fontWeight = FontWeight.Bold,
+            color = MaterialTheme.colorScheme.onSurface
+        )
     }
 }
 

@@ -8,13 +8,6 @@ import org.liftrr.ml.PoseQuality
 import org.liftrr.ml.PoseQualityAnalyzer
 import org.liftrr.ui.screens.session.WorkoutMode
 
-/**
- * Workout engine that orchestrates workout business logic
- * Handles exercise selection, rep counting, and form analysis
- *
- * Follows Single Responsibility Principle - only responsible for workout orchestration
- * Follows Dependency Inversion Principle - depends on Exercise abstraction
- */
 class WorkoutEngine {
 
     private var currentExercise: Exercise? = null

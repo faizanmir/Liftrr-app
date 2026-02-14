@@ -2,95 +2,36 @@ package org.liftrr.data.repository
 
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.withContext
 import org.liftrr.data.local.WorkoutDao
 import org.liftrr.data.models.WorkoutSessionEntity
+import org.liftrr.utils.DispatcherProvider
 import java.util.Calendar
 import javax.inject.Inject
 
-/**
- * Repository for managing workout sessions
- * Provides abstraction layer between data source and UI
- */
 interface WorkoutRepository {
-    /**
-     * Get all workout sessions ordered by timestamp descending
-     */
     fun getAllWorkouts(): Flow<List<WorkoutSessionEntity>>
-
-    /**
-     * Get recent workout sessions with limit
-     */
     fun getRecentWorkouts(limit: Int = 10): Flow<List<WorkoutSessionEntity>>
-
-    /**
-     * Get today's workout sessions
-     */
     fun getTodayWorkouts(): Flow<List<WorkoutSessionEntity>>
-
-    /**
-     * Get workouts since a specific timestamp
-     */
     fun getWorkoutsSince(startTime: Long): Flow<List<WorkoutSessionEntity>>
-
-    /**
-     * Get workouts from the last 7 days
-     */
     fun getWeekWorkouts(): Flow<List<WorkoutSessionEntity>>
-
-    /**
-     * Get workouts from the current month
-     */
     fun getMonthWorkouts(): Flow<List<WorkoutSessionEntity>>
-
-    /**
-     * Get a specific workout by ID
-     */
     suspend fun getWorkoutById(sessionId: String): WorkoutSessionEntity?
-
-    /**
-     * Save a workout session
-     */
     suspend fun saveWorkout(workout: WorkoutSessionEntity)
-
-    /**
-     * Delete a workout session
-     */
+    suspend fun markWorkoutAsDeleted(sessionId: String, deletedAt: Long = System.currentTimeMillis())
+    suspend fun restoreWorkout(sessionId: String)
+    suspend fun getDeletedWorkouts(): List<WorkoutSessionEntity>
+    suspend fun permanentlyDeleteWorkout(sessionId: String)
+    suspend fun permanentlyDeleteAllMarkedWorkouts()
     suspend fun deleteWorkout(workout: WorkoutSessionEntity)
-
-    /**
-     * Delete all workout sessions
-     */
     suspend fun deleteAllWorkouts()
-
-    /**
-     * Get total reps completed today
-     */
     fun getTodayTotalReps(): Flow<Int>
-
-    /**
-     * Get today's average workout quality
-     */
     fun getTodayAverageQuality(): Flow<Float>
-
-    /**
-     * Get total workout duration today in milliseconds
-     */
     fun getTodayTotalDuration(): Flow<Long>
-
-    /**
-     * Get workout count by exercise type for today
-     */
     fun getTodayWorkoutCountByType(): Flow<Map<String, Int>>
-
-    /**
-     * Get weekly statistics
-     */
     fun getWeeklyStats(): Flow<WorkoutStats>
 }
 
-/**
- * Statistics for workout analysis
- */
 data class WorkoutStats(
     val totalWorkouts: Int = 0,
     val totalReps: Int = 0,
@@ -101,11 +42,9 @@ data class WorkoutStats(
     val averageScore: Float = 0f
 )
 
-/**
- * Implementation of WorkoutRepository
- */
 class WorkoutRepositoryImpl @Inject constructor(
-    private val workoutDao: WorkoutDao
+    private val workoutDao: WorkoutDao,
+    private val dispatchers: DispatcherProvider
 ) : WorkoutRepository {
 
     override fun getAllWorkouts(): Flow<List<WorkoutSessionEntity>> {
@@ -132,7 +71,6 @@ class WorkoutRepositoryImpl @Inject constructor(
         calendar.set(Calendar.MILLISECOND, 0)
         calendar.add(Calendar.DAY_OF_YEAR, -7)
 
-        // Use limited query to avoid loading excessive data
         return workoutDao.getWorkoutsSinceWithLimit(calendar.timeInMillis, limit = 100)
     }
 
@@ -147,19 +85,39 @@ class WorkoutRepositoryImpl @Inject constructor(
         return workoutDao.getWorkoutsSince(calendar.timeInMillis)
     }
 
-    override suspend fun getWorkoutById(sessionId: String): WorkoutSessionEntity? {
-        return workoutDao.getWorkoutById(sessionId)
+    override suspend fun getWorkoutById(sessionId: String): WorkoutSessionEntity? = withContext(dispatchers.io) {
+        workoutDao.getWorkoutById(sessionId)
     }
 
-    override suspend fun saveWorkout(workout: WorkoutSessionEntity) {
+    override suspend fun saveWorkout(workout: WorkoutSessionEntity) = withContext(dispatchers.io) {
         workoutDao.insertWorkout(workout)
     }
 
-    override suspend fun deleteWorkout(workout: WorkoutSessionEntity) {
+    override suspend fun markWorkoutAsDeleted(sessionId: String, deletedAt: Long) = withContext(dispatchers.io) {
+        workoutDao.markAsDeleted(sessionId, deletedAt)
+    }
+
+    override suspend fun restoreWorkout(sessionId: String) = withContext(dispatchers.io) {
+        workoutDao.unmarkAsDeleted(sessionId)
+    }
+
+    override suspend fun getDeletedWorkouts(): List<WorkoutSessionEntity> = withContext(dispatchers.io) {
+        workoutDao.getDeletedWorkouts()
+    }
+
+    override suspend fun permanentlyDeleteWorkout(sessionId: String) = withContext(dispatchers.io) {
+        workoutDao.permanentlyDeleteWorkout(sessionId)
+    }
+
+    override suspend fun permanentlyDeleteAllMarkedWorkouts() = withContext(dispatchers.io) {
+        workoutDao.permanentlyDeleteAllMarkedWorkouts()
+    }
+
+    override suspend fun deleteWorkout(workout: WorkoutSessionEntity) = withContext(dispatchers.io) {
         workoutDao.deleteWorkout(workout)
     }
 
-    override suspend fun deleteAllWorkouts() {
+    override suspend fun deleteAllWorkouts() = withContext(dispatchers.io) {
         workoutDao.deleteAllWorkouts()
     }
 
@@ -209,10 +167,6 @@ class WorkoutRepositoryImpl @Inject constructor(
         }
     }
 
-    /**
-     * Convert grade to numeric score for comparison (lower is better)
-     * A=1, B=2, C=3, D=4, F=5
-     */
     private fun gradeToScore(grade: String): Int {
         return when (grade.uppercase()) {
             "A" -> 1

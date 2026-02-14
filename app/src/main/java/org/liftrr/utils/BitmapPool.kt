@@ -4,10 +4,6 @@ import android.graphics.Bitmap
 import java.util.concurrent.ConcurrentLinkedQueue
 import java.util.concurrent.atomic.AtomicInteger
 
-/**
- * Lock-free bitmap pool using ConcurrentLinkedQueue.
- * Safe for concurrent access from camera, MediaPipe, and UI threads.
- */
 class BitmapPool(
     private val capacity: Int,
     private val width: Int,

@@ -24,18 +24,15 @@ class MainActivity : AppCompatActivity() {
         val splashScreen = installSplashScreen()
         super.onCreate(savedInstanceState)
 
-        // Hide ActionBar
         supportActionBar?.hide()
         actionBar?.hide()
 
         enableEdgeToEdge()
 
-        // Keep splash visible while loading
         splashScreen.setKeepOnScreenCondition {
             splashViewModel.isLoading.value
         }
 
-        // Custom exit animation
         splashScreen.setOnExitAnimationListener { splashScreenView ->
             val fadeOut = ObjectAnimator.ofFloat(
                 splashScreenView.view, View.ALPHA, 1f, 0f

@@ -123,6 +123,7 @@ fun WorkoutPreparationScreen(
                     },
                     isRecording = false,
                     cameraSelector = CameraSelector.DEFAULT_BACK_CAMERA,
+                    dispatchers = viewModel.dispatchers,
                     modifier = Modifier.fillMaxSize()
                 )
 

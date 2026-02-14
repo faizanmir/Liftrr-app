@@ -8,6 +8,7 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -18,7 +19,18 @@ import androidx.navigation3.runtime.EntryProviderScope
 import androidx.navigation3.runtime.entryProvider
 import androidx.navigation3.runtime.rememberNavBackStack
 import androidx.navigation3.runtime.rememberSaveableStateHolderNavEntryDecorator
+import androidx.activity.compose.BackHandler
+import androidx.activity.compose.LocalOnBackPressedDispatcherOwner
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.togetherWith
+import android.util.Log
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.ui.platform.LocalLifecycleOwner
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
 import androidx.navigation3.ui.NavDisplay
+import org.liftrr.ui.navigation.NavigationAnimations
 import androidx.navigationevent.compose.LocalNavigationEventDispatcherOwner
 import androidx.navigationevent.compose.rememberNavigationEventDispatcherOwner
 import kotlinx.serialization.Serializable
@@ -66,6 +78,31 @@ sealed class Screen : NavKey {
     @Serializable data class WorkoutPlayback(val sessionId: String) : Screen()
 }
 
+// ─── Navigation Helpers ──────────────────────────────────────────────────────
+
+/**
+ * Top-level destinations - back gesture exits app instead of navigating back
+ * These are the main "home" screens where user can access primary app features
+ */
+private fun isTopLevelDestination(screen: NavKey) = screen is Screen.Home ||
+        screen is Screen.History ||
+        screen is Screen.Analytics ||
+        screen is Screen.Settings
+
+/**
+ * Determines if a screen should use modal animations (slide up from bottom)
+ */
+private fun isModalScreen(screen: NavKey) = screen is Screen.Settings ||
+        screen is Screen.WorkoutSummary
+
+/**
+ * Determines if a screen should use fade animations (onboarding)
+ */
+private fun isFadeScreen(screen: NavKey) = screen is Screen.Welcome ||
+        screen is Screen.PermissionScreen ||
+        screen is Screen.DeviceConnectionScreen ||
+        screen is Screen.CreateProfile
+
 // ─── App Root ────────────────────────────────────────────────────────────────
 
 @Composable
@@ -83,29 +120,112 @@ fun LiftrrApp(appViewModel: AppViewModel = hiltViewModel()) {
     val backStack = rememberNavBackStack(startDestination)
     val dispatcherOwner = rememberNavigationEventDispatcherOwner(parent = null)
 
-    val goBack: () -> Unit = { backStack.removeLastOrNull() }
+    // Track previous backstack size to detect forward vs back navigation
+    val previousBackStackSize = remember { mutableIntStateOf(backStack.size) }
+    val isNavigatingBack = backStack.size < previousBackStackSize.intValue
+    LaunchedEffect(backStack.size) {
+        previousBackStackSize.intValue = backStack.size
+    }
+
+    // Navigation functions
     fun navigate(screen: Screen) { backStack.add(screen) }
+
+    // For screens that need direct back callback (WorkoutScreen, etc.)
+    val goBack: () -> Unit = { backStack.removeLastOrNull() }
+
+    // Current screen to determine back behavior
+    val currentScreen = backStack.lastOrNull() ?: startDestination
+
+    // Only Home screen allows system back to exit app
+    // All other screens intercept back to navigate
+    val isHome = currentScreen is Screen.Home
+    val shouldInterceptBack = !isHome
 
     LiftrrTheme(darkTheme = darkTheme, dynamicColor = useDynamicColor) {
         CompositionLocalProvider(LocalNavigationEventDispatcherOwner provides dispatcherOwner) {
-            NavDisplay(
-                backStack = backStack,
-                onBack = goBack,
-                entryDecorators = listOf(
-                    rememberSaveableStateHolderNavEntryDecorator(),
-                    rememberViewModelStoreNavEntryDecorator()
-                ),
-                entryProvider = entryProvider {
-                    onboardingEntries(goBack = goBack, navigate = ::navigate, backStack = backStack)
-                    mainEntries(goBack = goBack, navigate = ::navigate)
-                    workoutEntries(
-                        goBack = goBack,
-                        navigate = ::navigate,
-                        backStack = backStack,
-                        reportHolder = appViewModel.workoutReportHolder
-                    )
+            // Handle system back gesture/button
+            // Only Home screen allows back to exit app
+            // All other screens navigate back or to Home
+            BackHandler(enabled = shouldInterceptBack) {
+                if (backStack.size > 1) {
+                    // Has previous screen in backstack: navigate back
+                    Log.d("LiftrrNav", "Back: Navigating from $currentScreen to previous screen")
+                    backStack.removeLastOrNull()
+                } else {
+                    // No previous screen: navigate to Home
+                    Log.d("LiftrrNav", "Back: Navigating from $currentScreen to Home (no backstack)")
+                    backStack.clear()
+                    backStack.add(Screen.Home)
                 }
-            )
+            }
+
+            // Log navigation state for debugging
+            LaunchedEffect(currentScreen, shouldInterceptBack, backStack.size) {
+                Log.d("LiftrrNav", "Current screen: $currentScreen")
+                Log.d("LiftrrNav", "Is Home: $isHome")
+                Log.d("LiftrrNav", "BackHandler enabled: $shouldInterceptBack")
+                Log.d("LiftrrNav", "BackStack size: ${backStack.size}")
+            }
+
+            // Material Motion animations based on screen type and navigation direction
+            // Use remember to avoid recomposing animation on every state change
+            val currentDestination = remember(backStack.size) {
+                backStack.lastOrNull() ?: startDestination
+            }
+
+            AnimatedContent(
+                targetState = currentDestination,
+                transitionSpec = {
+                    val targetScreen = targetState
+                    val initialScreen = initialState
+
+                    when {
+                        // Back navigation: scale out effect for all screens
+                        isNavigatingBack -> {
+                            NavigationAnimations.popEnterNone() togetherWith
+                                    NavigationAnimations.popExitScaleOut()
+                        }
+
+                        // Modal screens: slide up from bottom
+                        isModalScreen(targetScreen) -> {
+                            NavigationAnimations.slideUpFromBottom() togetherWith
+                                    NavigationAnimations.dimBackground()
+                        }
+
+                        // Onboarding screens: simple fade
+                        isFadeScreen(targetScreen) || isFadeScreen(initialScreen) -> {
+                            NavigationAnimations.fadeIn() togetherWith
+                                    NavigationAnimations.fadeOut()
+                        }
+
+                        // Forward navigation: horizontal slide
+                        else -> {
+                            NavigationAnimations.slideInFromRight() togetherWith
+                                    NavigationAnimations.slideOutToLeft()
+                        }
+                    }
+                },
+                label = "nav_animation"
+            ) {
+                NavDisplay(
+                    backStack = backStack,
+                    onBack = {}, // No-op: we handle back with BackHandler above
+                    entryDecorators = listOf(
+                        rememberSaveableStateHolderNavEntryDecorator(),
+                        rememberViewModelStoreNavEntryDecorator()
+                    ),
+                    entryProvider = entryProvider {
+                        onboardingEntries(goBack = goBack, navigate = ::navigate, backStack = backStack)
+                        mainEntries(goBack = goBack, navigate = ::navigate)
+                        workoutEntries(
+                            goBack = goBack,
+                            navigate = ::navigate,
+                            backStack = backStack,
+                            reportHolder = appViewModel.workoutReportHolder
+                        )
+                    }
+                )
+            }
         }
     }
 }
@@ -162,18 +282,18 @@ private fun EntryProviderScope<NavKey>.mainEntries(
 
     entry<Screen.History> {
         HistoryScreen(
-            onNavigateBack = goBack,
+            onNavigateBack = goBack,  // Toolbar back button works
             onWorkoutClick = { id -> navigate(Screen.WorkoutPlayback(id)) }
         )
     }
 
     entry<Screen.Analytics> {
-        AnalyticsScreen(onNavigateBack = goBack)
+        AnalyticsScreen(onNavigateBack = goBack)  // Toolbar back button works
     }
 
     entry<Screen.Settings> {
         ProfileScreen(
-            onNavigateBack = goBack,
+            onNavigateBack = goBack,  // Toolbar back button works
             onLoginClick = { navigate(Screen.CreateProfile(returnToProfile = true)) }
         )
     }

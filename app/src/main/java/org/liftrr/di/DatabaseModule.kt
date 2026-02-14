@@ -8,6 +8,7 @@ import dagger.Provides
 import dagger.hilt.InstallIn
 import dagger.hilt.android.qualifiers.ApplicationContext
 import dagger.hilt.components.SingletonComponent
+import org.liftrr.data.local.DatabaseMigrations
 import org.liftrr.data.local.LiftrrDb
 import org.liftrr.data.local.UserDao
 import org.liftrr.data.repository.AuthRepository
@@ -26,8 +27,9 @@ object DatabaseModule {
             LiftrrDb::class.java,
             "liftrr-db"
         )
-        .fallbackToDestructiveMigration() // For development - remove in production
-        .build()
+            .addMigrations(DatabaseMigrations.MIGRATION_6_7)
+            .fallbackToDestructiveMigration(false)
+            .build()
     }
 
     @Provides

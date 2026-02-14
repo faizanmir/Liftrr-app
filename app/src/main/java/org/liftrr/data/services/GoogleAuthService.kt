@@ -22,10 +22,6 @@ import java.util.UUID
 import javax.inject.Inject
 import javax.inject.Singleton
 
-/**
- * Service for handling Google Sign-In authentication
- * Encapsulates all Google Credential Manager and Firebase Auth logic
- */
 @Singleton
 class GoogleAuthService @Inject constructor(
     @param:GoogleSignInClientId private val webClientId: String
@@ -34,33 +30,20 @@ class GoogleAuthService @Inject constructor(
         const val TAG = "GoogleAuthService"
     }
 
-    /**
-     * Initiate Google Sign-In flow
-     * @param context Activity context required for displaying the credential picker UI
-     * @return Result with FirebaseUser on success or Exception on failure
-     */
     suspend fun signInWithGoogle(context: Context): Result<FirebaseUser> {
         return try {
             Log.d(TAG, "Starting Google Sign-In")
             Log.d(TAG, "WEB_CLIENT_ID: $webClientId")
 
-            // 1. Create Credential Manager
             val credentialManager = CredentialManager.create(context)
-
-            // 2. Generate nonce for security
             val nonce = generateNonce()
-
-            // 3. Build Google Sign-In option
             val googleIdOption = buildGoogleIdOption(nonce)
-
-            // 4. Build credential request
             val request = GetCredentialRequest.Builder()
                 .addCredentialOption(googleIdOption)
                 .build()
 
             Log.d(TAG, "Requesting credentials...")
 
-            // 5. Get credentials (this shows the Google account picker)
             val response = credentialManager.getCredential(
                 request = request,
                 context = context
@@ -68,7 +51,6 @@ class GoogleAuthService @Inject constructor(
 
             Log.d(TAG, "Credentials received, handling response...")
 
-            // 6. Handle the response and authenticate with Firebase
             handleCredentialResponse(response)
 
         } catch (e: GetCredentialCancellationException) {
@@ -87,9 +69,6 @@ class GoogleAuthService @Inject constructor(
         }
     }
 
-    /**
-     * Generate a secure nonce for Google Sign-In
-     */
     private fun generateNonce(): String {
         val rawNonce = UUID.randomUUID().toString()
         val bytes = rawNonce.toByteArray()
@@ -98,21 +77,15 @@ class GoogleAuthService @Inject constructor(
         return digest.fold("") { str, it -> str + "%02x".format(it) }
     }
 
-    /**
-     * Build Google ID option for credential request
-     */
     private fun buildGoogleIdOption(nonce: String): GetGoogleIdOption {
         return GetGoogleIdOption.Builder()
-            .setFilterByAuthorizedAccounts(false)  // Show all accounts
+            .setFilterByAuthorizedAccounts(false)
             .setServerClientId(webClientId)
             .setAutoSelectEnabled(true)
             .setNonce(nonce)
             .build()
     }
 
-    /**
-     * Handle the credential response and authenticate with Firebase
-     */
     private suspend fun handleCredentialResponse(response: GetCredentialResponse): Result<FirebaseUser> {
         return when (val credential = response.credential) {
             is CustomCredential -> {
@@ -130,18 +103,13 @@ class GoogleAuthService @Inject constructor(
         }
     }
 
-    /**
-     * Authenticate with Firebase using Google ID token
-     */
     private suspend fun authenticateWithFirebase(credential: CustomCredential): Result<FirebaseUser> {
         return try {
-            // Parse the Google ID token
             val googleIdTokenCredential = GoogleIdTokenCredential.createFrom(credential.data)
             val idToken = googleIdTokenCredential.idToken
 
             Log.d(TAG, "Got Google ID token, authenticating with Firebase...")
 
-            // Authenticate with Firebase
             val firebaseCredential = GoogleAuthProvider.getCredential(idToken, null)
             val authResult = FirebaseAuth.getInstance()
                 .signInWithCredential(firebaseCredential)

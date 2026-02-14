@@ -33,7 +33,9 @@ class SplashViewModel @Inject constructor(
 
     private fun initialize() {
         viewModelScope.launch {
-            val minSplashJob = launch { delay(2000L) }
+            // Reduced from 2000ms to 500ms for faster startup
+            // MediaPipe pre-warming happens in background (doesn't need 2s)
+            val minSplashJob = launch { delay(500L) }
 
             val hasCompletedOnboarding = false
 
@@ -41,7 +43,6 @@ class SplashViewModel @Inject constructor(
 
             minSplashJob.join()
 
-            // Determine destination
             _destination.value = when {
                 !hasCompletedOnboarding -> SplashDestination.Onboarding
                 activeSession != null -> SplashDestination.ResumeSession(1)

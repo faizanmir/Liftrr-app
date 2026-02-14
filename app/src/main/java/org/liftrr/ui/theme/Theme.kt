@@ -15,12 +15,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
 import androidx.core.view.WindowCompat
 
-/**
- * LIFTRR Light Color Scheme
- * Using Material 3 purple palette (seed: #6750A4)
- */
 private val LightColorScheme = lightColorScheme(
-    // Primary
     primary = md_theme_light_primary,
     onPrimary = md_theme_light_onPrimary,
     primaryContainer = md_theme_light_primaryContainer,
@@ -62,11 +57,7 @@ private val LightColorScheme = lightColorScheme(
     scrim = md_theme_light_scrim
 )
 
-/**
- * LIFTRR Dark Color Scheme
- */
 private val DarkColorScheme = darkColorScheme(
-    // Primary
     primary = md_theme_dark_primary,
     onPrimary = md_theme_dark_onPrimary,
     primaryContainer = md_theme_dark_primaryContainer,
@@ -108,45 +99,30 @@ private val DarkColorScheme = darkColorScheme(
     scrim = md_theme_dark_scrim
 )
 
-/**
- * LIFTRR App Theme
- *
- * @param darkTheme Whether to use dark theme (follows system by default)
- * @param dynamicColor Whether to use Material You wallpaper-based colors (Android 12+)
- *                     When false, uses energetic fitness brand colors
- *                     This can be toggled by users in settings
- * @param content Composable content
- */
 @Composable
 fun LiftrrTheme(
     darkTheme: Boolean = isSystemInDarkTheme(),
-    dynamicColor: Boolean = false, // Default to energetic fitness colors for vibrant look
+    dynamicColor: Boolean = false,
     content: @Composable () -> Unit
 ) {
     val colorScheme = when {
-        // Dynamic color from wallpaper (Android 12+) - User can toggle this
         dynamicColor && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S -> {
             val context = LocalContext.current
             if (darkTheme) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
         }
-        // Energetic fitness brand colors (default for alive, activity-focused feel)
         darkTheme -> DarkColorScheme
         else -> LightColorScheme
     }
 
-    // Update system bars for edge-to-edge Material You experience
     val view = LocalView.current
     if (!view.isInEditMode) {
         SideEffect {
             val window = (view.context as Activity).window
-            // Use transparent system bars for true edge-to-edge
             window.statusBarColor = android.graphics.Color.TRANSPARENT
             window.navigationBarColor = android.graphics.Color.TRANSPARENT
 
-            // Enable edge-to-edge display
             WindowCompat.setDecorFitsSystemWindows(window, false)
 
-            // Update system bar appearance based on theme
             WindowCompat.getInsetsController(window, view).apply {
                 isAppearanceLightStatusBars = !darkTheme
                 isAppearanceLightNavigationBars = !darkTheme
@@ -161,10 +137,6 @@ fun LiftrrTheme(
         content = content
     )
 }
-
-/**
- * Preview-safe theme (doesn't access Activity window)
- */
 
 @Composable
 fun LiftrrPreviewTheme(

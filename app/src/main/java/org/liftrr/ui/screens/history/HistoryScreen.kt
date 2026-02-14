@@ -1,6 +1,8 @@
 package org.liftrr.ui.screens.history
 
 import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -23,7 +25,6 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.outlined.FitnessCenter
 import androidx.compose.material.icons.outlined.History
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -34,6 +35,11 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Snackbar
+import androidx.compose.material3.SnackbarDuration
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.SnackbarResult
 import androidx.compose.material3.Surface
 import androidx.compose.material3.SwipeToDismissBox
 import androidx.compose.material3.SwipeToDismissBoxValue
@@ -43,8 +49,10 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.rememberSwipeToDismissBoxState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -64,7 +72,28 @@ fun HistoryScreen(
     viewModel: HistoryViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsState()
-    val workoutToDelete by viewModel.workoutToDelete.collectAsState()
+    val snackbarMessage by viewModel.showUndoSnackbar.collectAsState()
+    val snackbarHostState = remember { SnackbarHostState() }
+
+    // Show snackbar when delete occurs
+    LaunchedEffect(snackbarMessage) {
+        snackbarMessage?.let { message ->
+            snackbarHostState.showSnackbar(
+                message = message,
+                actionLabel = "Undo",
+                duration = SnackbarDuration.Short
+            ).let { result ->
+                when (result) {
+                    SnackbarResult.ActionPerformed -> {
+                        viewModel.undoDelete()
+                    }
+                    SnackbarResult.Dismissed -> {
+                        viewModel.dismissSnackbar()
+                    }
+                }
+            }
+        }
+    }
 
     Scaffold(
         containerColor = MaterialTheme.colorScheme.surface,
@@ -78,6 +107,9 @@ fun HistoryScreen(
                 },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Transparent)
             )
+        },
+        snackbarHost = {
+            SnackbarHost(hostState = snackbarHostState)
         }
     ) { padding ->
         Column(
@@ -121,7 +153,7 @@ fun HistoryScreen(
                                     is HistoryListItem.WorkoutCard -> SwipeableWorkoutCard(
                                         item = item.item,
                                         onClick = { onWorkoutClick(item.item.sessionId) },
-                                        onSwipeToDelete = { viewModel.requestDelete(item.item) }
+                                        onSwipeToDelete = { viewModel.deleteWorkout(item.item) }
                                     )
                                 }
                             }
@@ -130,27 +162,6 @@ fun HistoryScreen(
                 }
             }
         }
-    }
-
-    // Delete confirmation dialog
-    workoutToDelete?.let { item ->
-        AlertDialog(
-            onDismissRequest = viewModel::cancelDelete,
-            title = { Text("Delete Workout") },
-            text = {
-                Text("Delete this ${item.exerciseType.displayName()} workout? This cannot be undone.")
-            },
-            confirmButton = {
-                TextButton(onClick = viewModel::confirmDelete) {
-                    Text("Delete", color = MaterialTheme.colorScheme.error)
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = viewModel::cancelDelete) {
-                    Text("Cancel")
-                }
-            }
-        )
     }
 }
 
@@ -199,20 +210,48 @@ private fun SwipeableWorkoutCard(
         confirmValueChange = { value ->
             if (value == SwipeToDismissBoxValue.EndToStart) {
                 onSwipeToDelete()
+                false // Don't confirm - let database update handle removal
+            } else {
+                false
             }
-            false // Don't actually dismiss; let the dialog handle it
-        }
+        },
+        positionalThreshold = { totalDistance -> totalDistance * 0.4f } // Slower: 40% threshold
     )
+
+    // Reset dismiss state when item reappears (after undo)
+    LaunchedEffect(item.sessionId) {
+        dismissState.reset()
+    }
 
     SwipeToDismissBox(
         state = dismissState,
         backgroundContent = {
+            // Calculate swipe progress (0.0 to 1.0)
+            val progress = dismissState.progress
+
+            // Animate red color based on swipe progress
+            val backgroundColor = if (progress > 0f) {
+                // Red appears as user swipes
+                MaterialTheme.colorScheme.errorContainer.copy(
+                    alpha = (progress * 1.2f).coerceIn(0f, 1f) // Slightly faster fade-in
+                )
+            } else {
+                Color.Transparent
+            }
+
             val color by animateColorAsState(
-                targetValue = if (dismissState.targetValue == SwipeToDismissBoxValue.EndToStart)
-                    MaterialTheme.colorScheme.errorContainer
-                else Color.Transparent,
+                targetValue = backgroundColor,
+                animationSpec = tween(durationMillis = 200),
                 label = "swipe_bg"
             )
+
+            // Animate delete icon
+            val iconAlpha by animateFloatAsState(
+                targetValue = (progress * 2f).coerceIn(0f, 1f),
+                animationSpec = tween(durationMillis = 200),
+                label = "icon_alpha"
+            )
+
             Box(
                 modifier = Modifier
                     .fillMaxSize()
@@ -224,7 +263,7 @@ private fun SwipeableWorkoutCard(
                 Icon(
                     Icons.Default.Delete,
                     contentDescription = "Delete",
-                    tint = MaterialTheme.colorScheme.onErrorContainer
+                    tint = MaterialTheme.colorScheme.onErrorContainer.copy(alpha = iconAlpha)
                 )
             }
         },

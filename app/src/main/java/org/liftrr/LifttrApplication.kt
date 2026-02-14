@@ -1,45 +1,20 @@
 package org.liftrr
 
 import android.app.Application
-import android.util.Log
-import androidx.lifecycle.DefaultLifecycleObserver
-import androidx.lifecycle.LifecycleOwner
-import androidx.lifecycle.ProcessLifecycleOwner
 import dagger.hilt.android.HiltAndroidApp
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.launch
-import org.liftrr.ml.PoseDetector
-import javax.inject.Inject
 
+/**
+ * Liftrr Application class.
+ *
+ * Startup optimizations:
+ * - MediaPipe pre-warming handled by App Startup library (see MediaPipeInitializer)
+ * - PoseDetector is lazy-loaded when first accessed (Hilt @Singleton)
+ * - No eager initialization in Application.onCreate() for faster startup
+ */
 @HiltAndroidApp
 class LifttrApplication : Application() {
-
-    @Inject
-    lateinit var poseDetector: PoseDetector
-
-    @Inject
-    lateinit var appScope: CoroutineScope
-
-    override fun onCreate() {
-        super.onCreate()
-        ProcessLifecycleOwner.get().lifecycle.addObserver(object : DefaultLifecycleObserver {
-            override fun onStart(owner: LifecycleOwner) {
-                appScope.launch {
-                    try {
-                        poseDetector.initialize()
-                    } catch (e: Exception) {
-                        Log.e(
-                            "LifttrApplication",
-                            "Failed to initialize pose detector",
-                            e
-                        )
-                    }
-                }
-            }
-
-            override fun onStop(owner: LifecycleOwner) {
-                poseDetector.stop()
-            }
-        })
-    }
+    // Intentionally empty - all initialization handled by:
+    // 1. App Startup library (MediaPipeInitializer)
+    // 2. Hilt lazy injection
+    // 3. ViewModel initialization when screens are opened
 }

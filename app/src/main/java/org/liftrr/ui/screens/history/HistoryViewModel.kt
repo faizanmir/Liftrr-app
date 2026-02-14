@@ -12,6 +12,7 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import org.liftrr.data.models.WorkoutSessionEntity
 import org.liftrr.data.repository.WorkoutRepository
+import org.liftrr.domain.workmanager.WorkoutCleanupScheduler
 import org.liftrr.ml.ExerciseType
 import org.liftrr.utils.DispatcherProvider
 import java.util.Calendar
@@ -61,13 +62,16 @@ sealed class HistoryUiState {
 @HiltViewModel
 class HistoryViewModel @Inject constructor(
     private val workoutRepository: WorkoutRepository,
-    private val dispatchers: DispatcherProvider
+    private val dispatchers: DispatcherProvider,
+    private val cleanupScheduler: WorkoutCleanupScheduler
 ) : ViewModel() {
 
     private val _selectedFilter = MutableStateFlow(ExerciseFilter.ALL)
 
-    private val _workoutToDelete = MutableStateFlow<HistoryWorkoutItem?>(null)
-    val workoutToDelete: StateFlow<HistoryWorkoutItem?> = _workoutToDelete.asStateFlow()
+    private val _showUndoSnackbar = MutableStateFlow<String?>(null)
+    val showUndoSnackbar: StateFlow<String?> = _showUndoSnackbar.asStateFlow()
+
+    private var pendingDeletionSessionId: String? = null
 
     val uiState: StateFlow<HistoryUiState> = combine(
         workoutRepository.getAllWorkouts(),
@@ -89,29 +93,47 @@ class HistoryViewModel @Inject constructor(
         _selectedFilter.value = filter
     }
 
-    fun requestDelete(item: HistoryWorkoutItem) {
-        _workoutToDelete.value = item
-    }
-
-    fun cancelDelete() {
-        _workoutToDelete.value = null
-    }
-
-    fun confirmDelete() {
-        val item = _workoutToDelete.value ?: return
-        _workoutToDelete.value = null
+    fun deleteWorkout(item: HistoryWorkoutItem) {
         viewModelScope.launch(dispatchers.io) {
-            val entity = workoutRepository.getWorkoutById(item.sessionId)
-            if (entity != null) {
-                workoutRepository.deleteWorkout(entity)
-            }
+            // Mark workout as deleted (soft delete)
+            workoutRepository.markWorkoutAsDeleted(item.sessionId)
+
+            // Store the session ID for potential undo
+            pendingDeletionSessionId = item.sessionId
+
+            // Show snackbar
+            _showUndoSnackbar.value = "Workout deleted"
         }
+    }
+
+    fun undoDelete() {
+        val sessionId = pendingDeletionSessionId ?: return
+
+        viewModelScope.launch(dispatchers.io) {
+            // Restore the workout (unmark as deleted)
+            workoutRepository.restoreWorkout(sessionId)
+            // Note: We don't cancel the cleanup job here.
+            // The job will run and query for isDeleted=1 workouts.
+            // Since this workout is now isDeleted=0, it won't be cleaned up.
+        }
+
+        pendingDeletionSessionId = null
+        _showUndoSnackbar.value = null
+    }
+
+    fun dismissSnackbar() {
+        // When snackbar is dismissed, schedule WorkManager to clean up deleted workouts
+        if (pendingDeletionSessionId != null) {
+            cleanupScheduler.scheduleCleanup()
+        }
+
+        pendingDeletionSessionId = null
+        _showUndoSnackbar.value = null
     }
 
     private fun groupByDate(workouts: List<WorkoutSessionEntity>): List<HistoryListItem> {
         if (workouts.isEmpty()) return emptyList()
 
-        val now = Calendar.getInstance()
         val todayStart = Calendar.getInstance().apply {
             set(Calendar.HOUR_OF_DAY, 0); set(Calendar.MINUTE, 0)
             set(Calendar.SECOND, 0); set(Calendar.MILLISECOND, 0)

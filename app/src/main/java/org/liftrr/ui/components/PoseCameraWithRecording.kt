@@ -21,10 +21,11 @@ import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.ContextCompat
 import androidx.core.graphics.createBitmap
 import androidx.lifecycle.compose.LocalLifecycleOwner
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.asExecutor
 import org.liftrr.domain.video.VideoRecordingManager
 import org.liftrr.utils.BitmapPool
+import org.liftrr.utils.DefaultDispatcherProvider
+import org.liftrr.utils.DispatcherProvider
 import java.io.File
 
 /**
@@ -40,6 +41,7 @@ fun PoseCameraWithRecording(
     onRecordingStopped: (String) -> Unit = {},
     onRecordingError: (String) -> Unit = {},
     cameraSelector: CameraSelector = CameraSelector.DEFAULT_BACK_CAMERA,
+    dispatchers: DispatcherProvider = DefaultDispatcherProvider(),
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
@@ -104,7 +106,7 @@ fun PoseCameraWithRecording(
                         .build()
                         .also { analysis ->
                             analysis.setAnalyzer(
-                                Dispatchers.IO.asExecutor()
+                                dispatchers.io.asExecutor()
                             ) { imageProxy ->
                                 processImageProxyWithSkipping(
                                     imageProxy,
@@ -129,7 +131,8 @@ fun PoseCameraWithRecording(
                     videoCapture = videoCaptureUseCase
 
                     try {
-                        cameraProvider.unbindAll()
+                        // Don't use unbindAll() as it affects other camera composables in the backstack
+                        // Instead, just bind - CameraX will handle unbinding previous use cases for this lifecycle owner
                         cameraProvider.bindToLifecycle(
                             lifecycleOwner,
                             cameraSelector,

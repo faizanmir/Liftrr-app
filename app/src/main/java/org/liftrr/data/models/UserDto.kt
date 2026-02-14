@@ -12,11 +12,11 @@ enum class AuthProvider {
 
 @Entity(tableName = "users")
 data class UserDto(
-    @PrimaryKey val userId: String, // Firebase UID or generated ID for email/password
+    @PrimaryKey val userId: String,
     val firstName: String?,
     val lastName: String?,
     val email: String,
-    val passwordHash: String? = null, // Only for email/password auth
+    val passwordHash: String? = null,
     val authProvider: AuthProvider,
     val photoUrl: String? = null,
     val createdAt: Long = System.currentTimeMillis(),

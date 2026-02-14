@@ -2,22 +2,9 @@ package org.liftrr.ui.theme
 
 import androidx.compose.ui.graphics.Color
 
-/**
- * LIFTRR Color Palette - Energetic Fitness Theme
- *
- * Vibrant, high-energy colors designed for fitness and performance tracking
- * Primary: Electric Orange (energy, intensity, movement)
- * Secondary: Deep Ocean Blue (stability, trust)
- * Tertiary: Vibrant Cyan (performance, freshness)
- */
-
-// Seed / Brand color - Electric Orange
 val Seed = Color(0xFFFF6B35)
 
-// ============================================
-// Light Theme Colors - ENERGETIC FITNESS
-// ============================================
-val md_theme_light_primary = Color(0xFFFF6B35)           // Electric Orange
+val md_theme_light_primary = Color(0xFFFF6B35)
 val md_theme_light_onPrimary = Color(0xFFFFFFFF)
 val md_theme_light_primaryContainer = Color(0xFFFFDAD1)  // Light peach
 val md_theme_light_onPrimaryContainer = Color(0xFF3A0A00)
@@ -27,7 +14,7 @@ val md_theme_light_onSecondary = Color(0xFFFFFFFF)
 val md_theme_light_secondaryContainer = Color(0xFFD4E4FF)
 val md_theme_light_onSecondaryContainer = Color(0xFF001C38)
 
-val md_theme_light_tertiary = Color(0xFF00BCD4)          // Vibrant Cyan
+val md_theme_light_tertiary = Color(0xFF00BCD4)
 val md_theme_light_onTertiary = Color(0xFFFFFFFF)
 val md_theme_light_tertiaryContainer = Color(0xFFB3F5FF)
 val md_theme_light_onTertiaryContainer = Color(0xFF003640)
@@ -54,10 +41,7 @@ val md_theme_light_inversePrimary = Color(0xFFD0BCFF)
 val md_theme_light_surfaceTint = Color(0xFF6750A4)
 val md_theme_light_scrim = Color(0xFF000000)
 
-// ============================================
-// Dark Theme Colors - ENERGETIC FITNESS
-// ============================================
-val md_theme_dark_primary = Color(0xFFFFB4A3)            // Soft coral (dark mode primary)
+val md_theme_dark_primary = Color(0xFFFFB4A3)
 val md_theme_dark_onPrimary = Color(0xFF5F1600)
 val md_theme_dark_primaryContainer = Color(0xFFD84315)   // Deep orange
 val md_theme_dark_onPrimaryContainer = Color(0xFFFFDAD1)
@@ -94,73 +78,54 @@ val md_theme_dark_inversePrimary = Color(0xFF6750A4)
 val md_theme_dark_surfaceTint = Color(0xFFD0BCFF)
 val md_theme_dark_scrim = Color(0xFF000000)
 
-// ============================================
-// Energetic Accent Colors (for special UI elements)
-// ============================================
 object EnergyColors {
-    val electricOrange = Color(0xFFFF6B35)    // Primary brand
-    val vibrantCyan = Color(0xFF00BCD4)       // Performance
-    val limeGreen = Color(0xFF7CB342)         // Success/Growth
-    val hotPink = Color(0xFFE91E63)           // Highlights
-    val deepBlue = Color(0xFF1565C0)          // Stability
-    val sunsetOrange = Color(0xFFFF9800)      // Warmth
+    val electricOrange = Color(0xFFFF6B35)
+    val vibrantCyan = Color(0xFF00BCD4)
+    val limeGreen = Color(0xFF7CB342)
+    val hotPink = Color(0xFFE91E63)
+    val deepBlue = Color(0xFF1565C0)
+    val sunsetOrange = Color(0xFFFF9800)
 }
 
-// ============================================
-// Semantic Colors for Metrics (Updated for Energy)
-// ============================================
 object MetricColors {
-    // Velocity zones
-    val velocityHigh = Color(0xFF7CB342)   // Lime green - fast/good
-    val velocityMedium = Color(0xFFFF9800) // Vibrant orange - moderate
-    val velocityLow = Color(0xFFE91E63)    // Hot pink - slow/fatigue
+    val velocityHigh = Color(0xFF7CB342)
+    val velocityMedium = Color(0xFFFF9800)
+    val velocityLow = Color(0xFFE91E63)
 
-    // Range of motion
-    val romGood = Color(0xFF00BCD4)        // Cyan - excellent
-    val romWarning = Color(0xFFFF9800)     // Orange - needs work
-    val romPoor = Color(0xFFFF5252)        // Bright red - poor
+    val romGood = Color(0xFF00BCD4)
+    val romWarning = Color(0xFFFF9800)
+    val romPoor = Color(0xFFFF5252)
 
-    // Calibration status (0-3 scale)
-    val calibrationGood = Color(0xFF00BCD4)   // Cyan - 3
-    val calibrationFair = Color(0xFFFF9800)   // Orange - 2
-    val calibrationPoor = Color(0xFFFF5252)   // Red - 0-1
+    val calibrationGood = Color(0xFF00BCD4)
+    val calibrationFair = Color(0xFFFF9800)
+    val calibrationPoor = Color(0xFFFF5252)
 
-    // BLE connection
-    val connectionConnected = Color(0xFF7CB342)   // Lime - connected
-    val connectionConnecting = Color(0xFFFF9800)  // Orange - connecting
+    val connectionConnected = Color(0xFF7CB342)
+    val connectionConnecting = Color(0xFFFF9800)
     val connectionDisconnected = Color(0xFF9E9E9E)
 
-    // Battery levels
-    val batteryHigh = Color(0xFF7CB342)    // Lime - >50%
-    val batteryMedium = Color(0xFFFF9800)  // Orange - 20-50%
-    val batteryLow = Color(0xFFFF5252)     // Red - <20%
+    val batteryHigh = Color(0xFF7CB342)
+    val batteryMedium = Color(0xFFFF9800)
+    val batteryLow = Color(0xFFFF5252)
 
-    // Device orientation
     val orientationOk = Color(0xFF00BCD4)
     val orientationWarning = Color(0xFFFF9800)
     val orientationError = Color(0xFFFF5252)
 }
 
-// ============================================
-// Chart Colors
-// ============================================
 object ChartColors {
-    // Sensor data lines
-    val distanceLine = Color(0xFF2196F3)     // Blue
-    val velocityLine = Color(0xFF4CAF50)     // Green
-    val accelerationLine = Color(0xFFFF9800) // Orange
+    val distanceLine = Color(0xFF2196F3)
+    val velocityLine = Color(0xFF4CAF50)
+    val accelerationLine = Color(0xFFFF9800)
 
-    // Orientation angles
-    val rollLine = Color(0xFF9C27B0)   // Purple
-    val pitchLine = Color(0xFFE91E63)  // Pink
-    val yawLine = Color(0xFF00BCD4)    // Cyan
+    val rollLine = Color(0xFF9C27B0)
+    val pitchLine = Color(0xFFE91E63)
+    val yawLine = Color(0xFF00BCD4)
 
-    // Rep phases
-    val repConcentric = Color(0xFF4CAF50)  // Green - lifting
-    val repEccentric = Color(0xFF2196F3)   // Blue - lowering
-    val repMarker = Color(0xFFFF5722)      // Orange - rep boundary
+    val repConcentric = Color(0xFF4CAF50)
+    val repEccentric = Color(0xFF2196F3)
+    val repMarker = Color(0xFFFF5722)
 
-    // Bar path
-    val barPathLine = Color(0xFF6750A4)    // Primary purple
-    val barPathIdeal = Color(0xFF4CAF50)   // Green reference
+    val barPathLine = Color(0xFF6750A4)
+    val barPathIdeal = Color(0xFF4CAF50)
 }

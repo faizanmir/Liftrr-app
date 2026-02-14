@@ -10,10 +10,6 @@ import kotlinx.coroutines.flow.stateIn
 import org.liftrr.data.repository.AuthRepository
 import javax.inject.Inject
 
-/**
- * Application-level ViewModel
- * Manages app-wide state like authentication status
- */
 @HiltViewModel
 class AppViewModel @Inject constructor(
     authRepository: AuthRepository,

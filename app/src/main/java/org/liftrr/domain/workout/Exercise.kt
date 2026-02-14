@@ -2,28 +2,14 @@ package org.liftrr.domain.workout
 
 import org.liftrr.ml.PoseDetectionResult
 
-/**
- * Interface for exercise-specific logic
- * Each exercise type implements rep counting and form analysis
- */
 interface Exercise {
     fun analyzeFeedback(pose: PoseDetectionResult.Success): String
     fun updateRepCount(pose: PoseDetectionResult.Success): Boolean
     fun hadGoodForm(): Boolean
-
-    /**
-     * Returns a 0-100 form score for the last completed rep.
-     * 100 = perfect form, penalties are subtracted for deviations.
-     */
     fun formScore(): Float
-
     fun reset()
 }
 
-/**
- * Moving-average angle smoother to reduce jitter from noisy pose estimation.
- * Maintains a circular buffer of the last [windowSize] values.
- */
 class AngleSmoother(private val windowSize: Int = 3) {
     private val buffer = FloatArray(windowSize)
     private var count = 0

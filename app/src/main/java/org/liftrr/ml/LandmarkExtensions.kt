@@ -3,19 +3,6 @@ package org.liftrr.ml
 import androidx.compose.ui.geometry.Offset
 import com.google.mediapipe.tasks.components.containers.NormalizedLandmark
 
-/**
- * Extension functions for NormalizedLandmark
- *
- * Provides utility methods for landmark manipulation and validation.
- */
-
-/**
- * Convert normalized landmark to pixel coordinates
- *
- * @param imageWidth Width of the image in pixels
- * @param imageHeight Height of the image in pixels
- * @return Offset with absolute pixel coordinates
- */
 fun NormalizedLandmark.toOffset(imageWidth: Int, imageHeight: Int): Offset {
     return Offset(
         x = this.x() * imageWidth,

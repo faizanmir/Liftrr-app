@@ -46,7 +46,7 @@ data class ReadinessState(
 @HiltViewModel
 class CameraReadinessViewModel @Inject constructor(
     private val poseDetector: PoseDetector,
-    private val dispatchers: DispatcherProvider
+    val dispatchers: DispatcherProvider
 ) : ViewModel() {
 
     private val _readinessState = MutableStateFlow(ReadinessState())
