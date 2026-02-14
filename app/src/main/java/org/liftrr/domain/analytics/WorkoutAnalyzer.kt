@@ -345,28 +345,45 @@ object WorkoutAnalyzer {
         pose: PoseDetectionResult.Success,
         exerciseType: ExerciseType
     ): Float? {
+        val leftShoulder = pose.landmarks.getOrNull(PoseLandmarks.LEFT_SHOULDER)
+        val leftHip = pose.landmarks.getOrNull(PoseLandmarks.LEFT_HIP)
+        val leftKnee = pose.landmarks.getOrNull(PoseLandmarks.LEFT_KNEE)
+        val rightShoulder = pose.landmarks.getOrNull(PoseLandmarks.RIGHT_SHOULDER)
+        val rightHip = pose.landmarks.getOrNull(PoseLandmarks.RIGHT_HIP)
+        val rightKnee = pose.landmarks.getOrNull(PoseLandmarks.RIGHT_KNEE)
+
+        if (leftShoulder == null || leftHip == null || leftKnee == null ||
+            rightShoulder == null || rightHip == null || rightKnee == null) {
+            return null
+        }
+
         return when (exerciseType) {
-            ExerciseType.SQUAT -> {
-                val leftShoulder = pose.landmarks.getOrNull(PoseLandmarks.LEFT_SHOULDER)
-                val leftHip = pose.landmarks.getOrNull(PoseLandmarks.LEFT_HIP)
-                val leftKnee = pose.landmarks.getOrNull(PoseLandmarks.LEFT_KNEE)
-                val rightShoulder = pose.landmarks.getOrNull(PoseLandmarks.RIGHT_SHOULDER)
-                val rightHip = pose.landmarks.getOrNull(PoseLandmarks.RIGHT_HIP)
-                val rightKnee = pose.landmarks.getOrNull(PoseLandmarks.RIGHT_KNEE)
-
-                if (leftShoulder == null || leftHip == null || leftKnee == null ||
-                    rightShoulder == null || rightHip == null || rightKnee == null) {
-                    return null
-                }
-
+            ExerciseType.SQUAT, ExerciseType.DEADLIFT -> {
+                // For squats and deadlifts, compare hip angles
                 val leftHipAngle = PoseAnalyzer.calculateAngle(leftShoulder, leftHip, leftKnee)
                 val rightHipAngle = PoseAnalyzer.calculateAngle(rightShoulder, rightHip, rightKnee)
 
                 // Symmetry = 100 - percentage difference
                 val difference = abs(leftHipAngle - rightHipAngle)
-                100f - (difference / leftHipAngle * 100f).coerceIn(0f, 100f)
+                100f - (difference / leftHipAngle.coerceAtLeast(1f) * 100f).coerceIn(0f, 100f)
             }
-            else -> null
+            ExerciseType.BENCH_PRESS -> {
+                // For bench press, compare elbow angles
+                val leftElbow = pose.landmarks.getOrNull(PoseLandmarks.LEFT_ELBOW)
+                val leftWrist = pose.landmarks.getOrNull(PoseLandmarks.LEFT_WRIST)
+                val rightElbow = pose.landmarks.getOrNull(PoseLandmarks.RIGHT_ELBOW)
+                val rightWrist = pose.landmarks.getOrNull(PoseLandmarks.RIGHT_WRIST)
+
+                if (leftElbow == null || leftWrist == null || rightElbow == null || rightWrist == null) {
+                    return null
+                }
+
+                val leftElbowAngle = PoseAnalyzer.calculateAngle(leftShoulder, leftElbow, leftWrist)
+                val rightElbowAngle = PoseAnalyzer.calculateAngle(rightShoulder, rightElbow, rightWrist)
+
+                val difference = abs(leftElbowAngle - rightElbowAngle)
+                100f - (difference / leftElbowAngle.coerceAtLeast(1f) * 100f).coerceIn(0f, 100f)
+            }
         }
     }
 
