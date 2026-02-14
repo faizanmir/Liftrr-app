@@ -116,6 +116,17 @@ fun WorkoutScreen(
         viewModel.preInitializePoseDetector()
     }
 
+    // Auto-start recording when entering the workout screen
+    // Wait for pose detector initialization to complete
+    LaunchedEffect(uiState.isPoseDetectionInitializing) {
+        if (!uiState.isPoseDetectionInitializing && !uiState.isRecording) {
+            // Give camera a moment to stabilize
+            delay(300)
+            viewModel.startRecording()
+            viewModel.observePoseDetection()
+        }
+    }
+
     Scaffold(
         containerColor = Color.Transparent,
         topBar = {
