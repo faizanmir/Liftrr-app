@@ -34,6 +34,7 @@ class SquatExercise : Exercise {
         private const val TOP_ANGLE_THRESHOLD = 150f    // Minimum angle at top to count
 
         private const val GOOD_DEPTH_ANGLE = 110f
+        private const val DEPTH_THRESHOLD_ANGLE = 110f  // Threshold for depth diagnostics
         private const val FORWARD_LEAN_MAX = 45f
         private const val KNEE_VALGUS_THRESHOLD = 0.04f
 
@@ -238,6 +239,77 @@ class SquatExercise : Exercise {
             // Transitional positions
             else -> MovementPhase.TRANSITION
         }
+    }
+
+    override fun getFormDiagnostics(pose: PoseDetectionResult.Success): List<FormDiagnostic> {
+        val diagnostics = mutableListOf<FormDiagnostic>()
+        val landmarks = pose.landmarks
+
+        val leftHip = landmarks.getOrNull(23)
+        val leftKnee = landmarks.getOrNull(25)
+        val leftAnkle = landmarks.getOrNull(27)
+        val rightHip = landmarks.getOrNull(24)
+        val rightKnee = landmarks.getOrNull(26)
+        val rightAnkle = landmarks.getOrNull(28)
+
+        // 1. Check squat depth
+        val kneeAngle = BilateralAngleCalculator.calculateBilateralAngle(
+            leftHip, leftKnee, leftAnkle,
+            rightHip, rightKnee, rightAnkle
+        )
+
+        kneeAngle?.let { angle ->
+            if (angle > DEPTH_THRESHOLD_ANGLE && isAtBottom) {
+                diagnostics.add(
+                    FormDiagnostic(
+                        issue = "Shallow depth - not reaching parallel",
+                        angle = "Knee angle",
+                        measured = angle,
+                        expected = "< ${DEPTH_THRESHOLD_ANGLE.toInt()}° (parallel or below)",
+                        severity = if (angle > 120f) FormIssueSeverity.CRITICAL else FormIssueSeverity.MODERATE
+                    )
+                )
+            }
+        }
+
+        // 2. Check knee valgus (knees caving in)
+        if (leftKnee != null && rightKnee != null && leftAnkle != null && rightAnkle != null) {
+            val kneeWidth = kotlin.math.abs(leftKnee.x() - rightKnee.x())
+            val ankleWidth = kotlin.math.abs(leftAnkle.x() - rightAnkle.x())
+
+            if (ankleWidth > 0.01f) {
+                val kneeValgusRatio = kneeWidth / ankleWidth
+                if (kneeValgusRatio < 0.85f) {
+                    diagnostics.add(
+                        FormDiagnostic(
+                            issue = "Knees caving inward (valgus)",
+                            angle = "Knee tracking ratio",
+                            measured = kneeValgusRatio * 100f,
+                            expected = "≥ 85% (knees over toes)",
+                            severity = FormIssueSeverity.CRITICAL
+                        )
+                    )
+                }
+            }
+        }
+
+        // 3. Check forward lean
+        if (leftHip != null && leftKnee != null && leftAnkle != null) {
+            val hipKneeAngle = PoseAnalyzer.calculateAngle(leftAnkle, leftKnee, leftHip)
+            if (hipKneeAngle > 100f) {
+                diagnostics.add(
+                    FormDiagnostic(
+                        issue = "Excessive forward lean",
+                        angle = "Torso angle",
+                        measured = hipKneeAngle,
+                        expected = "< 100° (upright torso)",
+                        severity = FormIssueSeverity.MODERATE
+                    )
+                )
+            }
+        }
+
+        return diagnostics
     }
 
     override fun reset() {

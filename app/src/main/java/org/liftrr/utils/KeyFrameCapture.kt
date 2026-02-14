@@ -29,7 +29,8 @@ class KeyFrameCapture(private val context: Context) {
         poseData: PoseDetectionResult.Success,
         formScore: Float,
         formIssues: List<String>,
-        movementPhase: org.liftrr.domain.workout.MovementPhase = org.liftrr.domain.workout.MovementPhase.LOCKOUT
+        movementPhase: org.liftrr.domain.workout.MovementPhase = org.liftrr.domain.workout.MovementPhase.LOCKOUT,
+        diagnostics: List<org.liftrr.domain.workout.FormDiagnostic> = emptyList()
     ) {
         capturedFrames.add(
             CapturedFrame(
@@ -39,7 +40,8 @@ class KeyFrameCapture(private val context: Context) {
                 poseData = poseData,
                 formScore = formScore,
                 formIssues = formIssues,
-                movementPhase = movementPhase
+                movementPhase = movementPhase,
+                diagnostics = diagnostics
             )
         )
     }
@@ -130,7 +132,8 @@ class KeyFrameCapture(private val context: Context) {
                                     imagePath = it,
                                     description = "$phaseName Phase - Rep #$repNumber - Score: ${(frame.formScore * 100).toInt()}%",
                                     formScore = frame.formScore,
-                                    movementPhase = phase
+                                    movementPhase = phase,
+                                    diagnostics = frame.diagnostics
                                 )
                             )
                         }
@@ -164,7 +167,8 @@ class KeyFrameCapture(private val context: Context) {
                                 imagePath = it,
                                 description = "Rep #$repNumber - ${bestFrame.movementPhase.name.lowercase().replaceFirstChar { it.uppercase() }} - Score: ${(bestFrame.formScore * 100).toInt()}%",
                                 formScore = bestFrame.formScore,
-                                movementPhase = bestFrame.movementPhase
+                                movementPhase = bestFrame.movementPhase,
+                                diagnostics = bestFrame.diagnostics
                             )
                         )
                     }

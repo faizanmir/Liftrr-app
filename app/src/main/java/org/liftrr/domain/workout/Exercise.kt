@@ -16,6 +16,12 @@ interface Exercise {
      * Used for capturing key frames at different phases of the lift
      */
     fun detectMovementPhase(pose: PoseDetectionResult.Success): MovementPhase
+
+    /**
+     * Get detailed form diagnostics with specific angle measurements and issues
+     * Used for providing actionable feedback in reports
+     */
+    fun getFormDiagnostics(pose: PoseDetectionResult.Success): List<FormDiagnostic>
 }
 
 /**

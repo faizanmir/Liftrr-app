@@ -247,6 +247,79 @@ class DeadliftExercise : Exercise {
         }
     }
 
+    override fun getFormDiagnostics(pose: PoseDetectionResult.Success): List<FormDiagnostic> {
+        val diagnostics = mutableListOf<FormDiagnostic>()
+        val landmarks = pose.landmarks
+
+        val leftShoulder = landmarks.getOrNull(11)
+        val leftHip = landmarks.getOrNull(23)
+        val leftKnee = landmarks.getOrNull(25)
+        val rightShoulder = landmarks.getOrNull(12)
+        val rightHip = landmarks.getOrNull(24)
+        val rightKnee = landmarks.getOrNull(26)
+
+        // 1. Check hip angle for proper lockout
+        val hipAngle = BilateralAngleCalculator.calculateBilateralAngle(
+            leftShoulder, leftHip, leftKnee,
+            rightShoulder, rightHip, rightKnee
+        )
+
+        hipAngle?.let { angle ->
+            if (angle < TOP_ANGLE_THRESHOLD && isAtBottom) {
+                diagnostics.add(
+                    FormDiagnostic(
+                        issue = "Incomplete lockout",
+                        angle = "Hip angle",
+                        measured = angle,
+                        expected = "≥ ${TOP_ANGLE_THRESHOLD.toInt()}°",
+                        severity = if (angle < 150f) FormIssueSeverity.CRITICAL else FormIssueSeverity.MODERATE
+                    )
+                )
+            }
+        }
+
+        // 2. Check back straightness (trunk alignment)
+        val leftAnkle = landmarks.getOrNull(27)
+        val rightAnkle = landmarks.getOrNull(28)
+
+        val trunkRatio = if (leftShoulder != null && leftHip != null && leftAnkle != null) {
+            val shoulderHipDist = kotlin.math.abs(leftShoulder.x() - leftHip.x())
+            val hipAnkleDist = kotlin.math.abs(leftHip.x() - leftAnkle.x())
+            if (hipAnkleDist > 0.01f) shoulderHipDist / hipAnkleDist else 1f
+        } else null
+
+        trunkRatio?.let { ratio ->
+            if (ratio < 0.7f) {
+                diagnostics.add(
+                    FormDiagnostic(
+                        issue = "Rounded back - excessive forward lean",
+                        angle = "Trunk alignment ratio",
+                        measured = ratio * 100f,
+                        expected = "≥ 70%",
+                        severity = FormIssueSeverity.CRITICAL
+                    )
+                )
+            }
+        }
+
+        // 3. Check if hips dropped too low
+        hipAngle?.let { angle ->
+            if (angle < 50f) {
+                diagnostics.add(
+                    FormDiagnostic(
+                        issue = "Hips too low - turning into squat",
+                        angle = "Hip angle",
+                        measured = angle,
+                        expected = "60-120°",
+                        severity = FormIssueSeverity.MODERATE
+                    )
+                )
+            }
+        }
+
+        return diagnostics
+    }
+
     override fun reset() {
         isAtBottom = false
         bottomFrameCount = 0

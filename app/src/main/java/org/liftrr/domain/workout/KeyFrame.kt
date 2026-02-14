@@ -10,7 +10,8 @@ data class KeyFrame(
     val imagePath: String,  // Path to saved image with skeletal overlay
     val description: String,
     val formScore: Float? = null,
-    val movementPhase: MovementPhase? = null  // Phase of movement (setup, bottom, lockout, etc.)
+    val movementPhase: MovementPhase? = null,  // Phase of movement (setup, bottom, lockout, etc.)
+    val diagnostics: List<FormDiagnostic> = emptyList()  // Detailed form diagnostics with angles
 )
 
 /**
@@ -41,6 +42,23 @@ enum class MovementPhase {
 }
 
 /**
+ * Detailed diagnostic information about form issues with specific angle measurements
+ */
+data class FormDiagnostic(
+    val issue: String,              // e.g., "Shallow depth", "Knees caving in"
+    val angle: String,              // e.g., "Hip angle", "Knee angle"
+    val measured: Float,            // Actual measured angle in degrees
+    val expected: String,           // Expected range e.g., "< 90°", "160-180°"
+    val severity: FormIssueSeverity // How critical this issue is
+)
+
+enum class FormIssueSeverity {
+    MINOR,      // Small deviation, not critical
+    MODERATE,   // Noticeable issue that should be addressed
+    CRITICAL    // Major form break that could lead to injury
+}
+
+/**
  * Metadata for captured frames during workout
  */
 data class CapturedFrame(
@@ -50,5 +68,6 @@ data class CapturedFrame(
     val poseData: org.liftrr.ml.PoseDetectionResult.Success,
     val formScore: Float,
     val formIssues: List<String>,
-    val movementPhase: MovementPhase = MovementPhase.LOCKOUT  // Default to lockout for backward compatibility
+    val movementPhase: MovementPhase = MovementPhase.LOCKOUT,  // Default to lockout for backward compatibility
+    val diagnostics: List<FormDiagnostic> = emptyList()  // Detailed form diagnostics with angles
 )

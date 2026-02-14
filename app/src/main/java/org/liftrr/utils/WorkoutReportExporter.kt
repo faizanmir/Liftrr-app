@@ -437,7 +437,28 @@ object WorkoutReportExporter {
                                 bitmap.recycle()
 
                                 // Bad form label
-                                canvas.drawText("✗ Needs Work", rightX, yPosition + imageHeight + 15f, textPaint)
+                                var labelY = yPosition + imageHeight + 15f
+                                canvas.drawText("✗ Needs Work", rightX, labelY, textPaint)
+
+                                // Display diagnostics if available
+                                if (frame.diagnostics.isNotEmpty()) {
+                                    val diagPaint = Paint().apply {
+                                        textSize = 10f
+                                        color = android.graphics.Color.parseColor("#D32F2F") // Red color
+                                    }
+                                    labelY += 12f
+                                    frame.diagnostics.take(2).forEach { diagnostic ->
+                                        val diagText = "${diagnostic.issue}"
+                                        canvas.drawText(diagText, rightX, labelY, diagPaint)
+                                        labelY += 12f
+                                        val angleText = "${diagnostic.angle}: ${diagnostic.measured.toInt()}°"
+                                        canvas.drawText(angleText, rightX + 10, labelY, diagPaint)
+                                        labelY += 12f
+                                        val expectedText = "Expected: ${diagnostic.expected}"
+                                        canvas.drawText(expectedText, rightX + 10, labelY, diagPaint)
+                                        labelY += 14f
+                                    }
+                                }
                             }
                         } catch (e: Exception) {
                             android.util.Log.e("WorkoutReportExporter", "Error loading bad form image", e)

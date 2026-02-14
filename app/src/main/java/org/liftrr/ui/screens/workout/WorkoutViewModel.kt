@@ -248,7 +248,8 @@ class WorkoutViewModel @Inject constructor(
         formFeedback: String
     ) {
         // Detect current movement phase
-        val currentPhase = workoutEngine.getCurrentExercise()?.detectMovementPhase(result) ?: return
+        val exercise = workoutEngine.getCurrentExercise() ?: return
+        val currentPhase = exercise.detectMovementPhase(result)
 
         // Define which phases we want to capture (4-5 key phases)
         val importantPhases = setOf(
@@ -274,6 +275,9 @@ class WorkoutViewModel @Inject constructor(
                 emptyList()
             }
 
+            // Get detailed form diagnostics with specific angles
+            val diagnostics = exercise.getFormDiagnostics(result)
+
             // Capture this frame for later processing
             keyFrameCapture.captureFrame(
                 bitmap = bitmap,
@@ -282,7 +286,8 @@ class WorkoutViewModel @Inject constructor(
                 poseData = result,
                 formScore = formScore,
                 formIssues = formIssues,
-                movementPhase = currentPhase
+                movementPhase = currentPhase,
+                diagnostics = diagnostics
             )
 
             // Mark this phase as captured for this rep

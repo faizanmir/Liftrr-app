@@ -210,6 +210,76 @@ class BenchPressExercise : Exercise {
         }
     }
 
+    override fun getFormDiagnostics(pose: PoseDetectionResult.Success): List<FormDiagnostic> {
+        val diagnostics = mutableListOf<FormDiagnostic>()
+        val landmarks = pose.landmarks
+
+        val leftShoulder = landmarks.getOrNull(11)
+        val leftElbow = landmarks.getOrNull(13)
+        val leftWrist = landmarks.getOrNull(15)
+        val rightShoulder = landmarks.getOrNull(12)
+        val rightElbow = landmarks.getOrNull(14)
+        val rightWrist = landmarks.getOrNull(16)
+
+        // 1. Check elbow angle at bottom
+        val elbowAngle = BilateralAngleCalculator.calculateBilateralAngle(
+            leftShoulder, leftElbow, leftWrist,
+            rightShoulder, rightElbow, rightWrist
+        )
+
+        elbowAngle?.let { angle ->
+            if (angle > 100f && isAtBottom) {
+                diagnostics.add(
+                    FormDiagnostic(
+                        issue = "Insufficient range of motion",
+                        angle = "Elbow angle",
+                        measured = angle,
+                        expected = "60-90° (bar to chest)",
+                        severity = FormIssueSeverity.MODERATE
+                    )
+                )
+            }
+        }
+
+        // 2. Check elbow flare (elbows too wide)
+        if (leftShoulder != null && leftElbow != null && rightShoulder != null && rightElbow != null) {
+            val shoulderWidth = kotlin.math.abs(leftShoulder.x() - rightShoulder.x())
+            val elbowWidth = kotlin.math.abs(leftElbow.x() - rightElbow.x())
+
+            if (shoulderWidth > 0.01f) {
+                val elbowFlareRatio = elbowWidth / shoulderWidth
+                if (elbowFlareRatio > 1.4f) {
+                    diagnostics.add(
+                        FormDiagnostic(
+                            issue = "Elbows flaring out too wide",
+                            angle = "Elbow flare ratio",
+                            measured = elbowFlareRatio * 100f,
+                            expected = "< 140% (45° tuck recommended)",
+                            severity = FormIssueSeverity.MODERATE
+                        )
+                    )
+                }
+            }
+        }
+
+        // 3. Check lockout completion
+        elbowAngle?.let { angle ->
+            if (angle < TOP_ANGLE_THRESHOLD && !isAtBottom) {
+                diagnostics.add(
+                    FormDiagnostic(
+                        issue = "Incomplete lockout",
+                        angle = "Elbow angle",
+                        measured = angle,
+                        expected = "≥ ${TOP_ANGLE_THRESHOLD.toInt()}° (full extension)",
+                        severity = FormIssueSeverity.MINOR
+                    )
+                )
+            }
+        }
+
+        return diagnostics
+    }
+
     override fun reset() {
         isAtBottom = false
         bottomFrameCount = 0
