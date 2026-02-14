@@ -4,28 +4,19 @@ import org.liftrr.ml.PoseAnalyzer
 import org.liftrr.ml.PoseDetectionResult
 import org.liftrr.ml.PoseLandmarks
 
-/**
- * Squat exercise with angle-based depth detection, hysteresis,
- * knee valgus check, forward lean check, and weighted penalty scoring.
- *
- * Falls back to Y-position depth if ankles are not visible.
- */
 class SquatExercise : Exercise {
 
     private var isAtBottom = false
     private var bottomFrameCount = 0
     private var lastRepTime = 0L
 
-    // Angle smoothers — only used in updateRepCount to avoid double-feed
     private val kneeAngleSmoother = AngleSmoother(3)
     private val hipAngleSmoother = AngleSmoother(3)
 
-    // Cached smoothed values from updateRepCount for analyzeFeedback to read
     private var lastSmoothedKneeAngle = 180f
     private var lastSmoothedHipAngle = 90f
     private var usingAngleMode = false
 
-    // Per-rep form tracking
     private var repMinKneeAngle = Float.MAX_VALUE
     private var repMaxForwardLean = 0f
     private var repMaxKneeValgus = 0f
@@ -35,16 +26,13 @@ class SquatExercise : Exercise {
         private const val MIN_FRAMES_FOR_STABILITY = 2
         private const val MIN_REP_DURATION_MS = 600L
 
-        // Hysteresis thresholds for knee angle
-        private const val BOTTOM_ENTRY_ANGLE = 110f   // Must go below this to enter bottom
-        private const val BOTTOM_EXIT_ANGLE = 130f    // Must go above this to exit bottom
+        private const val BOTTOM_ENTRY_ANGLE = 110f
+        private const val BOTTOM_EXIT_ANGLE = 130f
 
-        // Form thresholds
         private const val GOOD_DEPTH_ANGLE = 110f
         private const val FORWARD_LEAN_MAX = 45f
         private const val KNEE_VALGUS_THRESHOLD = 0.04f
 
-        // Penalty weights (out of 100)
         private const val DEPTH_PENALTY_WEIGHT = 35f
         private const val FORWARD_LEAN_PENALTY_WEIGHT = 25f
         private const val KNEE_VALGUS_PENALTY_WEIGHT = 20f
@@ -62,7 +50,6 @@ class SquatExercise : Exercise {
             return "Move into frame"
         }
 
-        // Knee valgus check (only when ankles visible)
         if (leftAnkle != null && rightAnkle != null) {
             val leftValgus = leftAnkle.x() - leftKnee.x()
             val rightValgus = rightKnee.x() - rightAnkle.x()
@@ -71,7 +58,6 @@ class SquatExercise : Exercise {
             }
         }
 
-        // Use cached smoothed values from updateRepCount (avoids double-feed)
         if (usingAngleMode) {
             return when {
                 lastSmoothedKneeAngle > 150f -> "Start your squat"
@@ -81,7 +67,6 @@ class SquatExercise : Exercise {
             }
         }
 
-        // Fallback: Y-position feedback
         val avgHipY = (leftHip.y() + rightHip.y()) / 2
         val avgKneeY = (leftKnee.y() + rightKnee.y()) / 2
         return if (avgHipY > avgKneeY) "Good depth!" else "Go lower"
@@ -100,7 +85,6 @@ class SquatExercise : Exercise {
             return false
         }
 
-        // Determine if we can use angle-based detection
         val canUseAngle = leftAnkle != null
         usingAngleMode = canUseAngle
 
@@ -112,10 +96,8 @@ class SquatExercise : Exercise {
             val smoothedKnee = kneeAngleSmoother.add(kneeAngle)
             lastSmoothedKneeAngle = smoothedKnee
 
-            // Track form metrics
             if (smoothedKnee < repMinKneeAngle) repMinKneeAngle = smoothedKnee
 
-            // Forward lean tracking
             if (leftShoulder != null) {
                 val hipAngle = PoseAnalyzer.calculateAngle(leftShoulder, leftHip, leftKnee)
                 val smoothedHip = hipAngleSmoother.add(hipAngle)
@@ -124,7 +106,6 @@ class SquatExercise : Exercise {
                 if (forwardLean > repMaxForwardLean) repMaxForwardLean = forwardLean
             }
 
-            // Knee valgus tracking
             val rightAnkle = pose.getLandmark(PoseLandmarks.RIGHT_ANKLE)
             if (rightAnkle != null) {
                 val leftValgus = leftAnkle.x() - leftKnee.x()
@@ -136,14 +117,12 @@ class SquatExercise : Exercise {
             isAtBottomPosition = smoothedKnee < BOTTOM_ENTRY_ANGLE
             isAtTopPosition = smoothedKnee > BOTTOM_EXIT_ANGLE
         } else {
-            // Fallback: Y-position based detection (original method)
             val avgHipY = (leftHip.y() + rightHip.y()) / 2
             val avgKneeY = (leftKnee.y() + rightKnee.y()) / 2
             isAtBottomPosition = avgHipY > avgKneeY
             isAtTopPosition = avgHipY < avgKneeY - 0.03f
         }
 
-        // State machine
         if (isAtBottomPosition) {
             bottomFrameCount++
             if (bottomFrameCount >= MIN_FRAMES_FOR_STABILITY && !isAtBottom) {

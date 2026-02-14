@@ -5,23 +5,16 @@ import org.liftrr.ml.PoseDetectionResult
 import org.liftrr.ml.PoseLandmarks
 import kotlin.math.abs
 
-/**
- * Bench press exercise with elbow-angle based rep detection, hysteresis,
- * elbow flare check, and weighted penalty scoring.
- */
 class BenchPressExercise : Exercise {
 
     private var isAtBottom = false
     private var bottomFrameCount = 0
     private var lastRepTime = 0L
 
-    // Angle smoothers — only used in updateRepCount to avoid double-feed
     private val elbowAngleSmoother = AngleSmoother(3)
 
-    // Cached smoothed value from updateRepCount for analyzeFeedback to read
     private var lastSmoothedElbowAngle = 180f
 
-    // Per-rep form tracking
     private var repMinElbowAngle = Float.MAX_VALUE
     private var repMaxElbowFlare = 0f
     private var repMaxLockoutAngle = 0f
@@ -31,18 +24,15 @@ class BenchPressExercise : Exercise {
         private const val MIN_FRAMES_FOR_STABILITY = 2
         private const val MIN_REP_DURATION_MS = 600L
 
-        // Hysteresis thresholds for elbow angle (shoulder-elbow-wrist)
-        private const val BOTTOM_ENTRY_ANGLE = 110f   // Must go below this to enter bottom
-        private const val BOTTOM_EXIT_ANGLE = 130f    // Must go above this to exit bottom
-        private const val TOP_ANGLE_THRESHOLD = 155f   // Full lockout (used for form scoring only)
+        private const val BOTTOM_ENTRY_ANGLE = 110f
+        private const val BOTTOM_EXIT_ANGLE = 130f
+        private const val TOP_ANGLE_THRESHOLD = 155f
 
-        // Form thresholds
-        private const val GOOD_DEPTH_ANGLE = 110f     // Elbow angle at chest
-        private const val ELBOW_FLARE_MIN = 30f       // Minimum acceptable angle (degrees from torso)
-        private const val ELBOW_FLARE_MAX = 75f       // Maximum acceptable angle
-        private const val ELBOW_FLARE_THRESHOLD = 0.12f // Normalized X distance for excessive flare
+        private const val GOOD_DEPTH_ANGLE = 110f
+        private const val ELBOW_FLARE_MIN = 30f
+        private const val ELBOW_FLARE_MAX = 75f
+        private const val ELBOW_FLARE_THRESHOLD = 0.12f
 
-        // Penalty weights (out of 100)
         private const val DEPTH_PENALTY_WEIGHT = 30f
         private const val ELBOW_FLARE_PENALTY_WEIGHT = 25f
         private const val LOCKOUT_PENALTY_WEIGHT = 25f
@@ -62,8 +52,6 @@ class BenchPressExercise : Exercise {
             return "Position yourself on bench"
         }
 
-        // Use cached smoothed value from updateRepCount (avoids double-feed)
-        // Elbow flare check: elbows too wide relative to shoulders
         val shoulderWidth = abs(leftShoulder.x() - rightShoulder.x())
         val elbowWidth = abs(leftElbow.x() - rightElbow.x())
         val flareRatio = if (shoulderWidth > 0.01f) elbowWidth / shoulderWidth else 1f
@@ -100,11 +88,9 @@ class BenchPressExercise : Exercise {
         val smoothedElbow = elbowAngleSmoother.add(elbowAngle)
         lastSmoothedElbowAngle = smoothedElbow
 
-        // Track form metrics
         if (smoothedElbow < repMinElbowAngle) repMinElbowAngle = smoothedElbow
         if (smoothedElbow > repMaxLockoutAngle) repMaxLockoutAngle = smoothedElbow
 
-        // Elbow flare tracking
         if (rightElbow != null) {
             val shoulderWidth = abs(leftShoulder.x() - rightShoulder.x())
             val elbowWidth = abs(leftElbow.x() - rightElbow.x())
@@ -112,7 +98,6 @@ class BenchPressExercise : Exercise {
             if (flareRatio > repMaxElbowFlare) repMaxElbowFlare = flareRatio
         }
 
-        // Hysteresis state machine
         val isAtBottomPosition = smoothedElbow < BOTTOM_ENTRY_ANGLE
 
         if (isAtBottomPosition) {
@@ -121,8 +106,6 @@ class BenchPressExercise : Exercise {
                 isAtBottom = true
             }
         } else if (smoothedElbow > BOTTOM_EXIT_ANGLE && isAtBottom) {
-            // Rep completed: went from bottom past exit threshold
-            // No longer requires full lockout — form scoring handles lockout quality
             val currentTime = System.currentTimeMillis()
             if (currentTime - lastRepTime >= MIN_REP_DURATION_MS) {
                 isAtBottom = false
@@ -148,21 +131,18 @@ class BenchPressExercise : Exercise {
     private fun calculateFormScore(): Float {
         var score = 100f
 
-        // Depth penalty: did they touch chest?
         if (repMinElbowAngle > GOOD_DEPTH_ANGLE) {
             val depthDeviation = ((repMinElbowAngle - GOOD_DEPTH_ANGLE) / 40f).coerceIn(0f, 1f)
             score -= depthDeviation * DEPTH_PENALTY_WEIGHT
         }
 
-        // Elbow flare penalty: ratio > 1.8 means too wide, < 0.7 means too tucked
-        val idealFlare = 1.3f  // Roughly 45-degree angle from torso
+        val idealFlare = 1.3f
         val flareDev = abs(repMaxElbowFlare - idealFlare)
         if (flareDev > 0.3f) {
             val flareDeviation = ((flareDev - 0.3f) / 0.8f).coerceIn(0f, 1f)
             score -= flareDeviation * ELBOW_FLARE_PENALTY_WEIGHT
         }
 
-        // Lockout penalty
         if (repMaxLockoutAngle < TOP_ANGLE_THRESHOLD) {
             val deviation = ((TOP_ANGLE_THRESHOLD - repMaxLockoutAngle) / 25f).coerceIn(0f, 1f)
             score -= deviation * LOCKOUT_PENALTY_WEIGHT

@@ -2,19 +2,9 @@ package org.liftrr.ml
 
 import androidx.compose.ui.graphics.Color
 
-/**
- * Pose skeleton connections for rendering
- *
- * Defines how landmarks connect to form a skeleton overlay.
- */
 object PoseConnections {
 
-    /**
-     * Landmark connections for drawing skeleton
-     * Each pair represents a line to draw between landmarks
-     */
     val SKELETON_LINES = listOf(
-        // Face
         PoseLandmarks.NOSE to PoseLandmarks.LEFT_EYE_INNER,
         PoseLandmarks.LEFT_EYE_INNER to PoseLandmarks.LEFT_EYE,
         PoseLandmarks.LEFT_EYE to PoseLandmarks.LEFT_EYE_OUTER,
@@ -25,13 +15,11 @@ object PoseConnections {
         PoseLandmarks.RIGHT_EYE_OUTER to PoseLandmarks.RIGHT_EAR,
         PoseLandmarks.MOUTH_LEFT to PoseLandmarks.MOUTH_RIGHT,
 
-        // Torso
         PoseLandmarks.LEFT_SHOULDER to PoseLandmarks.RIGHT_SHOULDER,
         PoseLandmarks.LEFT_SHOULDER to PoseLandmarks.LEFT_HIP,
         PoseLandmarks.RIGHT_SHOULDER to PoseLandmarks.RIGHT_HIP,
         PoseLandmarks.LEFT_HIP to PoseLandmarks.RIGHT_HIP,
 
-        // Left arm
         PoseLandmarks.LEFT_SHOULDER to PoseLandmarks.LEFT_ELBOW,
         PoseLandmarks.LEFT_ELBOW to PoseLandmarks.LEFT_WRIST,
         PoseLandmarks.LEFT_WRIST to PoseLandmarks.LEFT_PINKY,
@@ -39,7 +27,6 @@ object PoseConnections {
         PoseLandmarks.LEFT_WRIST to PoseLandmarks.LEFT_THUMB,
         PoseLandmarks.LEFT_PINKY to PoseLandmarks.LEFT_INDEX,
 
-        // Right arm
         PoseLandmarks.RIGHT_SHOULDER to PoseLandmarks.RIGHT_ELBOW,
         PoseLandmarks.RIGHT_ELBOW to PoseLandmarks.RIGHT_WRIST,
         PoseLandmarks.RIGHT_WRIST to PoseLandmarks.RIGHT_PINKY,
@@ -47,14 +34,12 @@ object PoseConnections {
         PoseLandmarks.RIGHT_WRIST to PoseLandmarks.RIGHT_THUMB,
         PoseLandmarks.RIGHT_PINKY to PoseLandmarks.RIGHT_INDEX,
 
-        // Left leg
         PoseLandmarks.LEFT_HIP to PoseLandmarks.LEFT_KNEE,
         PoseLandmarks.LEFT_KNEE to PoseLandmarks.LEFT_ANKLE,
         PoseLandmarks.LEFT_ANKLE to PoseLandmarks.LEFT_HEEL,
         PoseLandmarks.LEFT_ANKLE to PoseLandmarks.LEFT_FOOT_INDEX,
         PoseLandmarks.LEFT_HEEL to PoseLandmarks.LEFT_FOOT_INDEX,
 
-        // Right leg
         PoseLandmarks.RIGHT_HIP to PoseLandmarks.RIGHT_KNEE,
         PoseLandmarks.RIGHT_KNEE to PoseLandmarks.RIGHT_ANKLE,
         PoseLandmarks.RIGHT_ANKLE to PoseLandmarks.RIGHT_HEEL,

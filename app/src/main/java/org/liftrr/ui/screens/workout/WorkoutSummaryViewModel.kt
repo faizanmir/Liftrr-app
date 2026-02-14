@@ -3,7 +3,6 @@ package org.liftrr.ui.screens.workout
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -11,6 +10,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.liftrr.domain.analytics.WorkoutReport
 import org.liftrr.ml.WorkoutLLM
+import org.liftrr.utils.DispatcherProvider
 import javax.inject.Inject
 
 /**
@@ -18,7 +18,8 @@ import javax.inject.Inject
  */
 @HiltViewModel
 class WorkoutSummaryViewModel @Inject constructor(
-    private val workoutLLM: WorkoutLLM
+    private val workoutLLM: WorkoutLLM,
+    private val dispatchers: DispatcherProvider
 ) : ViewModel() {
 
     private val _aiSummary = MutableStateFlow<AIInsightState>(AIInsightState.Idle)
@@ -33,22 +34,24 @@ class WorkoutSummaryViewModel @Inject constructor(
     private val _isInitializing = MutableStateFlow(false)
     val isInitializing: StateFlow<Boolean> = _isInitializing.asStateFlow()
 
-    init {
-        // Initialize the LLM on background thread when ViewModel is created
-        viewModelScope.launch {
-            _isInitializing.value = true
-            try {
-                // Offload LLM initialization to IO thread to prevent ANR
-                withContext(Dispatchers.IO) {
-                    workoutLLM.initialize()
-                }
-            } catch (e: Exception) {
-                // LLM initialization failed, insights will show error state
-                _aiSummary.value = AIInsightState.Error("AI model not available: ${e.message}")
-                _aiRecommendations.value = AIInsightState.Error("AI model not available")
-            } finally {
-                _isInitializing.value = false
+    private var isLLMInitialized = false
+
+    private suspend fun ensureLLMInitialized() {
+        if (isLLMInitialized) return
+
+        _isInitializing.value = true
+        try {
+            // Offload LLM initialization to IO thread to prevent ANR
+            withContext(dispatchers.io) {
+                workoutLLM.initialize()
             }
+            isLLMInitialized = true
+        } catch (e: Exception) {
+            // LLM initialization failed, insights will show error state
+            _aiSummary.value = AIInsightState.Error("AI model not available: ${e.message}")
+            _aiRecommendations.value = AIInsightState.Error("AI model not available")
+        } finally {
+            _isInitializing.value = false
         }
     }
 
@@ -57,6 +60,9 @@ class WorkoutSummaryViewModel @Inject constructor(
      */
     fun generateInsights(report: WorkoutReport) {
         viewModelScope.launch {
+            // Ensure LLM is initialized before generating insights
+            ensureLLMInitialized()
+
             // Generate workout summary
             generateSummary(report)
 
@@ -73,7 +79,7 @@ class WorkoutSummaryViewModel @Inject constructor(
 
         try {
             // Offload LLM inference to IO thread to prevent ANR
-            val summary = withContext(Dispatchers.IO) {
+            val summary = withContext(dispatchers.io) {
                 workoutLLM.generateWorkoutSummary(report)
             }
 
@@ -92,7 +98,7 @@ class WorkoutSummaryViewModel @Inject constructor(
 
         try {
             // Offload LLM inference to IO thread to prevent ANR
-            val recommendations = withContext(Dispatchers.IO) {
+            val recommendations = withContext(dispatchers.io) {
                 workoutLLM.generatePersonalizedRecommendations(
                     report = report,
                     userGoals = null // Could be retrieved from user profile
@@ -119,7 +125,7 @@ class WorkoutSummaryViewModel @Inject constructor(
             }
 
             // Offload LLM inference to IO thread to prevent ANR
-            val message = withContext(Dispatchers.IO) {
+            val message = withContext(dispatchers.io) {
                 workoutLLM.generateMotivation(context)
             }
             _motivationalMessage.value = message

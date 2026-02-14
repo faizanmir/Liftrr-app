@@ -24,10 +24,6 @@ import org.liftrr.domain.ConnectionState
 import org.liftrr.domain.ScanState
 import javax.inject.Inject
 
-/**
- * Foreground service for maintaining Bluetooth connection in background.
- * Follows Interface Segregation: Injects only the interfaces it needs.
- */
 @AndroidEntryPoint
 class BluetoothConnectionService : LifecycleService() {
 

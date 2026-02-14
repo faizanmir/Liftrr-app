@@ -1,8 +1,5 @@
 package org.liftrr.ml
 
-/**
- * Supported exercise types for pose-based form analysis
- */
 enum class ExerciseType {
     SQUAT,
     DEADLIFT,

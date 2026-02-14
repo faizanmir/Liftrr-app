@@ -21,3 +21,4 @@ dependencyResolutionManagement {
 
 rootProject.name = "Lifttr"
 include(":app")
+include(":benchmark")

@@ -12,10 +12,6 @@ import java.security.MessageDigest
 import java.util.UUID
 import javax.inject.Inject
 
-/**
- * Local implementation of AuthRepository using Room database
- * This is temporary - will be replaced with remote authentication later
- */
 class LocalAuthRepository @Inject constructor(
     private val userDao: UserDao,
     private val googleAuthService: GoogleAuthService
@@ -42,7 +38,6 @@ class LocalAuthRepository @Inject constructor(
                 return AuthResult.Error("Invalid password")
             }
 
-            // Update last login time
             val updatedUser = user.copy(lastLoginAt = System.currentTimeMillis())
             userDao.update(updatedUser)
 
@@ -63,14 +58,12 @@ class LocalAuthRepository @Inject constructor(
         return try {
             Log.d(TAG, "Attempting sign up for email: $email")
 
-            // Check if user already exists
             val existingUser = userDao.getUserByEmail(email)
             if (existingUser != null) {
                 Log.e(TAG, "User already exists with email: $email")
                 return AuthResult.Error("User with this email already exists")
             }
 
-            // Create new user
             val userId = UUID.randomUUID().toString()
             val hashedPassword = hashPassword(password)
 
@@ -102,7 +95,6 @@ class LocalAuthRepository @Inject constructor(
         return try {
             Log.d(TAG, "Initiating Google sign in")
 
-            // Use GoogleAuthService to handle the sign-in flow
             val result = googleAuthService.signInWithGoogle(context)
 
             result.fold(
@@ -112,11 +104,9 @@ class LocalAuthRepository @Inject constructor(
                     val email = firebaseUser.email
                         ?: return AuthResult.Error("No email found in Google account")
 
-                    // Check if user exists
                     var user = userDao.getUserByEmail(email)
 
                     if (user == null) {
-                        // Create new user from Google account
                         val displayNameParts = firebaseUser.displayName?.split(" ") ?: listOf()
                         val firstName = displayNameParts.firstOrNull()
                         val lastName = displayNameParts.drop(1).joinToString(" ").takeIf { it.isNotEmpty() }
@@ -136,7 +126,6 @@ class LocalAuthRepository @Inject constructor(
                         userDao.insert(user)
                         Log.d(TAG, "New Google user created: $user")
                     } else {
-                        // Update last login time
                         user = user.copy(lastLoginAt = System.currentTimeMillis())
                         userDao.update(user)
                         Log.d(TAG, "Existing Google user logged in: ${user.email}")
@@ -182,10 +171,6 @@ class LocalAuthRepository @Inject constructor(
         return user != null
     }
 
-    /**
-     * Hash password using SHA-256
-     * NOTE: In production, use a proper password hashing algorithm like bcrypt or Argon2
-     */
     private fun hashPassword(password: String): String {
         val md = MessageDigest.getInstance("SHA-256")
         val digest = md.digest(password.toByteArray())

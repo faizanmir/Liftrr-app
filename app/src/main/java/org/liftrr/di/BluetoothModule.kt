@@ -14,21 +14,6 @@ import org.liftrr.domain.BluetoothServiceController
 import org.liftrr.bluetooth.BluetoothServiceControllerImpl
 import javax.inject.Singleton
 
-/**
- * Hilt module providing Bluetooth-related dependencies.
- *
- * Follows Dependency Inversion Principle:
- * - High-level modules depend on abstractions (interfaces)
- * - Low-level modules (impl) also depend on abstractions
- *
- * Each interface has its own dedicated implementation:
- * - BluetoothServiceController -> BluetoothServiceControllerImpl
- * - BluetoothScanner -> BluetoothScannerImpl
- * - BluetoothConnector -> BluetoothConnectorImpl
- * - BluetoothConnectionManager -> BluetoothConnectionManagerImpl (composite)
- *
- * Clients can inject only what they need (Interface Segregation Principle).
- */
 @Module
 @InstallIn(SingletonComponent::class)
 abstract class BluetoothModule {

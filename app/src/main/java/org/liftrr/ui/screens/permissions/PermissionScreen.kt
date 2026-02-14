@@ -37,6 +37,10 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -124,8 +128,18 @@ fun PermissionScreen(permissionScreenViewModel: PermissionScreenViewModel = hilt
         permissions = bluetoothPermissions + listOf(Manifest.permission.CAMERA, Manifest.permission.ACCESS_FINE_LOCATION)
     )
 
+    // Track if user has denied permissions after being prompted
+    var hasAttemptedPermissionRequest by remember { mutableStateOf(false) }
+
     // Update the ViewModel with the initial status of the permissions
     LaunchedEffect(Unit) {
+        permissionScreenViewModel.onPermissionResult(PermissionId.CAMERA, cameraPermissionState.status.isGranted)
+        permissionScreenViewModel.onPermissionResult(PermissionId.LOCATION, locationPermissionState.status.isGranted)
+        permissionScreenViewModel.onPermissionResult(PermissionId.BLUETOOTH, bluetoothPermissionState.allPermissionsGranted)
+    }
+
+    // Update permission states when they change
+    LaunchedEffect(allPermissionsState.allPermissionsGranted, allPermissionsState.permissions) {
         permissionScreenViewModel.onPermissionResult(PermissionId.CAMERA, cameraPermissionState.status.isGranted)
         permissionScreenViewModel.onPermissionResult(PermissionId.LOCATION, locationPermissionState.status.isGranted)
         permissionScreenViewModel.onPermissionResult(PermissionId.BLUETOOTH, bluetoothPermissionState.allPermissionsGranted)
@@ -169,13 +183,46 @@ fun PermissionScreen(permissionScreenViewModel: PermissionScreenViewModel = hilt
 
         Spacer(modifier = Modifier.height(12.dp))
 
+        // Determine if button should be enabled
+        val allPermissionsGranted = allPermissionsState.allPermissionsGranted
+        val buttonEnabled = if (hasAttemptedPermissionRequest) {
+            // After attempting, only enable if all permissions are granted
+            allPermissionsGranted
+        } else {
+            // Before attempting, always enable
+            true
+        }
+
         FilledTonalButton(
             onClick = {
-                allPermissionsState.launchMultiplePermissionRequest()
+                if (allPermissionsGranted) {
+                    // All permissions already granted, proceed to next screen
+                    onContinueClicked()
+                } else {
+                    // Request permissions
+                    hasAttemptedPermissionRequest = true
+                    allPermissionsState.launchMultiplePermissionRequest()
+                }
             },
+            enabled = buttonEnabled,
             modifier = Modifier.fillMaxWidth()
         ) {
-            Text("Grant All Permissions", modifier = Modifier.padding(10.dp))
+            Text(
+                text = if (allPermissionsGranted) "Continue" else "Grant All Permissions",
+                modifier = Modifier.padding(10.dp)
+            )
+        }
+
+        // Show hint when permissions are denied after request
+        if (hasAttemptedPermissionRequest && !allPermissionsGranted) {
+            Spacer(modifier = Modifier.height(8.dp))
+            Text(
+                text = "Please grant permissions individually above to continue",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                textAlign = TextAlign.Center,
+                modifier = Modifier.fillMaxWidth()
+            )
         }
     }
 }

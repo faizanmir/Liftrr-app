@@ -156,7 +156,7 @@ fun WorkoutScreen(
                 }, onRecordingError = { error ->
                     // Handle recording error
                     // TODO: Show error to user
-                }, cameraSelector = cameraSelector, modifier = Modifier.fillMaxSize()
+                }, cameraSelector = cameraSelector, dispatchers = viewModel.dispatchers, modifier = Modifier.fillMaxSize()
                 )
             }
 

@@ -465,6 +465,24 @@ private fun WorkoutPlaybackContent(
                 )
             }
 
+            // Rep-by-Rep Breakdown
+            if (workoutData.repData != null && workoutData.repData.isNotEmpty()) {
+                Column(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    Text(
+                        text = "Rep Breakdown",
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.Bold
+                    )
+
+                    workoutData.repData.forEach { rep ->
+                        RepBreakdownCard(rep)
+                    }
+                }
+            }
+
                 Spacer(modifier = Modifier.height(16.dp))
             }
         }
@@ -686,6 +704,177 @@ private fun generateAverageVelocityCurve(avgQuality: Float): List<Float> {
         baseVelocity * 0.22f,
         0.0f
     )
+}
+
+@Composable
+private fun RepBreakdownCard(rep: RepDataDto) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = if (rep.isGoodForm) {
+                MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.3f)
+            } else {
+                MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.3f)
+            }
+        )
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column {
+                    Text(
+                        text = "Rep #${rep.repNumber}",
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Text(
+                        text = if (rep.isGoodForm) "Good Form" else "Needs Work",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = if (rep.isGoodForm) {
+                            MaterialTheme.colorScheme.tertiary
+                        } else {
+                            MaterialTheme.colorScheme.error
+                        }
+                    )
+                }
+
+                Icon(
+                    imageVector = if (rep.isGoodForm) Icons.Default.CheckCircle else Icons.Default.Error,
+                    contentDescription = null,
+                    tint = if (rep.isGoodForm) {
+                        MaterialTheme.colorScheme.tertiary
+                    } else {
+                        MaterialTheme.colorScheme.error
+                    }
+                )
+            }
+
+            // Show metrics chips
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                rep.depth?.let {
+                    RepMetricChip(
+                        label = "Depth",
+                        value = "${it.toInt()}°"
+                    )
+                }
+                if (rep.durationMs > 0) {
+                    RepMetricChip(
+                        label = "Time",
+                        value = "%.1fs".format(rep.durationMs / 1000f)
+                    )
+                }
+                RepMetricChip(
+                    label = "Quality",
+                    value = "${(rep.quality * 100).toInt()}%"
+                )
+            }
+
+            // Show form feedback
+            if (rep.formIssues.isNotEmpty()) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(
+                            if (rep.isGoodForm) {
+                                MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.3f)
+                            } else {
+                                MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.3f)
+                            }
+                        )
+                        .padding(12.dp),
+                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    rep.formIssues.forEach { issue ->
+                        Row(
+                            verticalAlignment = Alignment.Top,
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            Text(
+                                text = if (rep.isGoodForm) "✓" else "•",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = if (rep.isGoodForm) {
+                                    MaterialTheme.colorScheme.tertiary
+                                } else {
+                                    MaterialTheme.colorScheme.error
+                                }
+                            )
+                            Text(
+                                text = issue,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = if (rep.isGoodForm) {
+                                    MaterialTheme.colorScheme.onTertiaryContainer
+                                } else {
+                                    MaterialTheme.colorScheme.onErrorContainer
+                                }
+                            )
+                        }
+                    }
+                }
+            } else if (rep.isGoodForm) {
+                // Show positive feedback for good reps with no issues
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.3f))
+                        .padding(12.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    Text(
+                        text = "✓",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.tertiary
+                    )
+                    Text(
+                        text = "Excellent form maintained",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onTertiaryContainer
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun RepMetricChip(
+    label: String,
+    value: String
+) {
+    Row(
+        modifier = Modifier
+            .clip(RoundedCornerShape(12.dp))
+            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
+            .padding(horizontal = 10.dp, vertical = 6.dp),
+        horizontalArrangement = Arrangement.spacedBy(4.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(
+            text = label,
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        Text(
+            text = value,
+            style = MaterialTheme.typography.labelSmall,
+            fontWeight = FontWeight.Bold,
+            color = MaterialTheme.colorScheme.onSurface
+        )
+    }
 }
 
 private fun formatDuration(durationMs: Long): String {

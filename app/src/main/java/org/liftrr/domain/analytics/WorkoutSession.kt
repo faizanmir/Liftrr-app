@@ -5,12 +5,6 @@ import org.liftrr.ml.ExerciseType
 import org.liftrr.ml.PoseDetectionResult
 import org.liftrr.ui.screens.session.WorkoutMode
 
-/**
- * Represents a complete workout session with all collected data
- *
- * This is the primary data structure for workout analytics and reporting.
- * Contains all pose detection results, rep data, and metadata needed for analysis.
- */
 data class WorkoutSession(
     val id: String,
     val exerciseType: ExerciseType,
@@ -22,53 +16,29 @@ data class WorkoutSession(
     val videoPath: String? = null,
     val completed: Boolean = false
 ) {
-    /**
-     * Calculate total workout duration in milliseconds
-     */
     val durationMs: Long
         get() = (endTime ?: System.currentTimeMillis()) - startTime
 
-    /**
-     * Get total rep count
-     */
     val totalReps: Int
         get() = reps.size
 
-    /**
-     * Get good form rep count
-     */
     val goodReps: Int
         get() = reps.count { it.isGoodForm }
 
-    /**
-     * Get bad form rep count
-     */
     val badReps: Int
         get() = reps.size - goodReps
 
-    /**
-     * Get average pose quality score across all reps
-     */
     val averageQuality: Float
         get() = if (reps.isEmpty()) 0f else reps.map { it.poseQuality }.average().toFloat()
 }
 
-/**
- * Represents a single frame of pose detection data
- *
- * Stores the pose detection result along with timing information.
- * Used for detailed analysis and video synchronization.
- */
 data class PoseFrame(
     val timestamp: Long,
     val frameNumber: Int,
     val poseResult: PoseDetectionResult,
-    val repNumber: Int? = null // Which rep this frame belongs to (if any)
+    val repNumber: Int? = null
 )
 
-/**
- * Builder for WorkoutSession to collect data during workout
- */
 class WorkoutSessionBuilder(
     private val exerciseType: ExerciseType,
     private val workoutMode: WorkoutMode
@@ -80,16 +50,10 @@ class WorkoutSessionBuilder(
     private var videoPath: String? = null
     private var frameCounter = 0
 
-    /**
-     * Add a rep to the session
-     */
     fun addRep(rep: RepData) {
         reps.add(rep)
     }
 
-    /**
-     * Add a pose detection frame
-     */
     fun addPoseFrame(poseResult: PoseDetectionResult, currentRepNumber: Int? = null) {
         poseFrames.add(
             PoseFrame(
@@ -101,16 +65,10 @@ class WorkoutSessionBuilder(
         )
     }
 
-    /**
-     * Set video path for the session
-     */
     fun setVideoPath(path: String) {
         videoPath = path
     }
 
-    /**
-     * Build the final WorkoutSession
-     */
     fun build(completed: Boolean = true): WorkoutSession {
         return WorkoutSession(
             id = id,

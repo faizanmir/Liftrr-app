@@ -4,42 +4,18 @@ import com.google.mediapipe.tasks.components.containers.NormalizedLandmark
 import kotlin.math.acos
 import kotlin.math.sqrt
 
-/**
- * Utility class for pose analysis calculations
- *
- * Provides geometric calculations and exercise-specific detection logic
- * for analyzing body positions during workouts.
- */
 object PoseAnalyzer {
 
-    /**
-     * Calculate angle between three points (useful for joint angles)
-     *
-     * Uses the dot product formula to compute the angle at point2 (vertex)
-     * formed by the lines point1-point2 and point2-point3.
-     *
-     * Example: Elbow angle using shoulder-elbow-wrist points
-     * ```
-     * val elbowAngle = PoseAnalyzer.calculateAngle(shoulder, elbow, wrist)
-     * ```
-     *
-     * @param point1 First point (e.g., shoulder)
-     * @param point2 Vertex point where angle is measured (e.g., elbow)
-     * @param point3 Third point (e.g., wrist)
-     * @return Angle in degrees (0-180)
-     */
     fun calculateAngle(
         point1: NormalizedLandmark,
         point2: NormalizedLandmark,
         point3: NormalizedLandmark
     ): Float {
-        // Create vectors from vertex to other points
         val vector1X = point1.x() - point2.x()
         val vector1Y = point1.y() - point2.y()
         val vector2X = point3.x() - point2.x()
         val vector2Y = point3.y() - point2.y()
 
-        // Calculate angle using dot product formula: cos(θ) = (v1 · v2) / (|v1| × |v2|)
         val dotProduct = vector1X * vector2X + vector1Y * vector2Y
         val magnitude1 = sqrt(vector1X * vector1X + vector1Y * vector1Y)
         val magnitude2 = sqrt(vector2X * vector2X + vector2Y * vector2Y)

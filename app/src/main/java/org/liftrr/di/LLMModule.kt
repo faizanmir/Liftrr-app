@@ -9,9 +9,6 @@ import dagger.hilt.components.SingletonComponent
 import org.liftrr.ml.WorkoutLLM
 import javax.inject.Singleton
 
-/**
- * Dagger module for LLM dependencies
- */
 @Module
 @InstallIn(SingletonComponent::class)
 object LLMModule {

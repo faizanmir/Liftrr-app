@@ -5,25 +5,18 @@ import org.liftrr.ml.PoseDetectionResult
 import org.liftrr.ml.PoseLandmarks
 import kotlin.math.abs
 
-/**
- * Deadlift exercise with hip-hinge angle detection, hysteresis,
- * back rounding detection (trunk alignment), and weighted penalty scoring.
- */
 class DeadliftExercise : Exercise {
 
     private var isAtBottom = false
     private var bottomFrameCount = 0
     private var lastRepTime = 0L
 
-    // Angle smoothers — only used in updateRepCount to avoid double-feed
     private val hipAngleSmoother = AngleSmoother(3)
     private val trunkSmoother = AngleSmoother(3)
 
-    // Cached smoothed values from updateRepCount for analyzeFeedback to read
     private var lastSmoothedHipAngle = 180f
     private var lastSmoothedTrunkRatio = 1f
 
-    // Per-rep form tracking
     private var wentTooLowDuringRep = false
     private var repMinTrunkAlignment = Float.MAX_VALUE
     private var repMinHipAngle = Float.MAX_VALUE
@@ -34,17 +27,13 @@ class DeadliftExercise : Exercise {
         private const val MIN_FRAMES_FOR_STABILITY = 2
         private const val MIN_REP_DURATION_MS = 600L
 
-        // Hysteresis thresholds for hip angle
-        private const val BOTTOM_ENTRY_ANGLE = 115f   // Must go below this to enter bottom
-        private const val BOTTOM_EXIT_ANGLE = 130f    // Must go above this to exit bottom
-        private const val TOP_ANGLE_THRESHOLD = 160f   // Full lockout
-        private const val SQUAT_THRESHOLD = 80f        // Below this is squatting
+        private const val BOTTOM_ENTRY_ANGLE = 115f
+        private const val BOTTOM_EXIT_ANGLE = 130f
+        private const val TOP_ANGLE_THRESHOLD = 160f
+        private const val SQUAT_THRESHOLD = 80f
 
-        // Trunk alignment: shoulder-hip Y distance relative to hip-knee Y distance
-        // A ratio < 0.85 indicates back rounding
         private const val TRUNK_ALIGNMENT_THRESHOLD = 0.85f
 
-        // Penalty weights (out of 100)
         private const val SQUATTING_PENALTY = 40f
         private const val BACK_ROUNDING_PENALTY_WEIGHT = 30f
         private const val LOCKOUT_PENALTY_WEIGHT = 20f
@@ -64,7 +53,6 @@ class DeadliftExercise : Exercise {
             return "Move into frame"
         }
 
-        // Use cached smoothed values from updateRepCount (avoids double-feed)
         if (lastSmoothedTrunkRatio < TRUNK_ALIGNMENT_THRESHOLD && lastSmoothedHipAngle < BOTTOM_EXIT_ANGLE) {
             return "Keep back straight!"
         }
@@ -93,22 +81,18 @@ class DeadliftExercise : Exercise {
         val smoothedHip = hipAngleSmoother.add(hipAngle)
         lastSmoothedHipAngle = smoothedHip
 
-        // Track form metrics
         if (smoothedHip < repMinHipAngle) repMinHipAngle = smoothedHip
         if (smoothedHip > repMaxLockoutAngle) repMaxLockoutAngle = smoothedHip
 
-        // Back rounding tracking
         val trunkRatio = calculateTrunkAlignment(leftShoulder, leftHip, leftKnee)
         val smoothedTrunk = trunkSmoother.add(trunkRatio)
         lastSmoothedTrunkRatio = smoothedTrunk
         if (smoothedTrunk < repMinTrunkAlignment) repMinTrunkAlignment = smoothedTrunk
 
-        // Squatting detection
         if (smoothedHip < SQUAT_THRESHOLD) {
             wentTooLowDuringRep = true
         }
 
-        // Hysteresis state machine
         val isAtBottomPosition = smoothedHip < BOTTOM_ENTRY_ANGLE
 
         if (isAtBottomPosition) {
@@ -120,7 +104,6 @@ class DeadliftExercise : Exercise {
                 repMaxLockoutAngle = 0f
             }
         } else if (smoothedHip > TOP_ANGLE_THRESHOLD && isAtBottom) {
-            // Rep completed: went from bottom to lockout
             val currentTime = System.currentTimeMillis()
             if (currentTime - lastRepTime >= MIN_REP_DURATION_MS) {
                 isAtBottom = false
@@ -157,18 +140,15 @@ class DeadliftExercise : Exercise {
     private fun calculateFormScore(): Float {
         var score = 100f
 
-        // Squatting penalty (binary — this is bad form)
         if (wentTooLowDuringRep) {
             score -= SQUATTING_PENALTY
         }
 
-        // Back rounding penalty
         if (repMinTrunkAlignment < TRUNK_ALIGNMENT_THRESHOLD) {
             val deviation = ((TRUNK_ALIGNMENT_THRESHOLD - repMinTrunkAlignment) / 0.3f).coerceIn(0f, 1f)
             score -= deviation * BACK_ROUNDING_PENALTY_WEIGHT
         }
 
-        // Lockout penalty: did they fully extend?
         if (repMaxLockoutAngle < TOP_ANGLE_THRESHOLD) {
             val deviation = ((TOP_ANGLE_THRESHOLD - repMaxLockoutAngle) / 25f).coerceIn(0f, 1f)
             score -= deviation * LOCKOUT_PENALTY_WEIGHT
