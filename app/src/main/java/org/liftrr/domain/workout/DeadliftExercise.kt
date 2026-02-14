@@ -10,6 +10,7 @@ class DeadliftExercise : Exercise {
 
     private var isAtBottom = false
     private var bottomFrameCount = 0
+    private var topFrameCount = 0  // Track frames at lockout position
     private var lastRepTime = 0L
 
     private val hipAngleSmoother = AngleSmoother(3)
@@ -25,12 +26,14 @@ class DeadliftExercise : Exercise {
     private var lastFormScore = 100f
 
     companion object {
-        private const val MIN_FRAMES_FOR_STABILITY = 2
-        private const val MIN_REP_DURATION_MS = 600L
+        // Stricter stability requirements to prevent false reps
+        private const val MIN_FRAMES_FOR_STABILITY = 6  // ~200ms at 30fps
+        private const val MIN_REP_DURATION_MS = 1200L   // Minimum 1.2 seconds per rep
+        private const val MIN_FRAMES_AT_TOP = 3         // Must hold lockout position
 
         private const val BOTTOM_ENTRY_ANGLE = 115f
         private const val BOTTOM_EXIT_ANGLE = 130f
-        private const val TOP_ANGLE_THRESHOLD = 160f
+        private const val TOP_ANGLE_THRESHOLD = 165f    // Stricter lockout requirement
         private const val SQUAT_THRESHOLD = 80f
 
         private const val TRUNK_ALIGNMENT_THRESHOLD = 0.85f
@@ -108,6 +111,7 @@ class DeadliftExercise : Exercise {
 
         if (isAtBottomPosition) {
             bottomFrameCount++
+            topFrameCount = 0  // Reset top counter when at bottom
             if (bottomFrameCount >= MIN_FRAMES_FOR_STABILITY && !isAtBottom) {
                 isAtBottom = true
                 wentTooLowDuringRep = false
@@ -115,19 +119,30 @@ class DeadliftExercise : Exercise {
                 repMaxLockoutAngle = 0f
             }
         } else if (smoothedHip > TOP_ANGLE_THRESHOLD && isAtBottom) {
-            val currentTime = System.currentTimeMillis()
-            if (currentTime - lastRepTime >= MIN_REP_DURATION_MS) {
-                isAtBottom = false
-                bottomFrameCount = 0
-                lastRepTime = currentTime
-                lastFormScore = calculateFormScore()
-                resetRepTracking()
-                return true
-            }
-        }
-
-        if (!isAtBottomPosition) {
+            // At top position - increment top frame counter
+            topFrameCount++
             bottomFrameCount = 0
+
+            // Only count rep if held at top for required frames AND minimum duration met
+            if (topFrameCount >= MIN_FRAMES_AT_TOP) {
+                val currentTime = System.currentTimeMillis()
+                if (currentTime - lastRepTime >= MIN_REP_DURATION_MS) {
+                    isAtBottom = false
+                    topFrameCount = 0
+                    lastRepTime = currentTime
+                    lastFormScore = calculateFormScore()
+                    resetRepTracking()
+                    return true
+                }
+            }
+        } else {
+            // In transition zone - reset counters
+            if (!isAtBottomPosition) {
+                bottomFrameCount = 0
+            }
+            if (smoothedHip <= TOP_ANGLE_THRESHOLD) {
+                topFrameCount = 0
+            }
         }
 
         return false
@@ -202,6 +217,7 @@ class DeadliftExercise : Exercise {
     override fun reset() {
         isAtBottom = false
         bottomFrameCount = 0
+        topFrameCount = 0
         lastRepTime = 0L
         lastFormScore = 100f
         lastSmoothedHipAngle = 180f

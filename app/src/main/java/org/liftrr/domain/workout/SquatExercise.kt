@@ -8,6 +8,7 @@ class SquatExercise : Exercise {
 
     private var isAtBottom = false
     private var bottomFrameCount = 0
+    private var topFrameCount = 0  // Track frames at standing position
     private var lastRepTime = 0L
 
     private val kneeAngleSmoother = AngleSmoother(3)
@@ -23,11 +24,14 @@ class SquatExercise : Exercise {
     private var lastFormScore = 100f
 
     companion object {
-        private const val MIN_FRAMES_FOR_STABILITY = 2
-        private const val MIN_REP_DURATION_MS = 600L
+        // Stricter stability requirements to prevent false reps
+        private const val MIN_FRAMES_FOR_STABILITY = 6  // ~200ms at 30fps
+        private const val MIN_REP_DURATION_MS = 1200L   // Minimum 1.2 seconds per rep
+        private const val MIN_FRAMES_AT_TOP = 3         // Must hold standing position
 
         private const val BOTTOM_ENTRY_ANGLE = 110f
         private const val BOTTOM_EXIT_ANGLE = 130f
+        private const val TOP_ANGLE_THRESHOLD = 150f    // Minimum angle at top to count
 
         private const val GOOD_DEPTH_ANGLE = 110f
         private const val FORWARD_LEAN_MAX = 45f
@@ -128,30 +132,42 @@ class SquatExercise : Exercise {
             }
 
             isAtBottomPosition = lastSmoothedKneeAngle < BOTTOM_ENTRY_ANGLE
-            isAtTopPosition = lastSmoothedKneeAngle > BOTTOM_EXIT_ANGLE
+            isAtTopPosition = lastSmoothedKneeAngle > TOP_ANGLE_THRESHOLD
         } else {
             val avgHipY = (leftHip.y() + rightHip.y()) / 2
             val avgKneeY = (leftKnee.y() + rightKnee.y()) / 2
             isAtBottomPosition = avgHipY > avgKneeY
-            isAtTopPosition = avgHipY < avgKneeY - 0.03f
+            isAtTopPosition = avgHipY < avgKneeY - 0.05f  // Stricter top position requirement
         }
 
         if (isAtBottomPosition) {
             bottomFrameCount++
+            topFrameCount = 0  // Reset top counter when at bottom
             if (bottomFrameCount >= MIN_FRAMES_FOR_STABILITY && !isAtBottom) {
                 isAtBottom = true
             }
-        } else {
+        } else if (isAtTopPosition && isAtBottom) {
+            // At top position - increment top frame counter
+            topFrameCount++
             bottomFrameCount = 0
-            if (isAtTopPosition && isAtBottom) {
+
+            // Only count rep if held at top for required frames AND minimum duration met
+            if (topFrameCount >= MIN_FRAMES_AT_TOP) {
                 val currentTime = System.currentTimeMillis()
                 if (currentTime - lastRepTime >= MIN_REP_DURATION_MS) {
                     isAtBottom = false
+                    topFrameCount = 0
                     lastRepTime = currentTime
                     lastFormScore = calculateFormScore()
                     resetRepTracking()
                     return true
                 }
+            }
+        } else {
+            // In transition zone - reset counters
+            bottomFrameCount = 0
+            if (!isAtTopPosition) {
+                topFrameCount = 0
             }
         }
 
@@ -194,6 +210,7 @@ class SquatExercise : Exercise {
     override fun reset() {
         isAtBottom = false
         bottomFrameCount = 0
+        topFrameCount = 0
         lastRepTime = 0L
         lastFormScore = 100f
         usingAngleMode = false

@@ -1,8 +1,11 @@
 package org.liftrr.ui.screens.workout
 
+import android.content.Context
+import android.graphics.Bitmap
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
+import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -26,6 +29,7 @@ import org.liftrr.ml.PoseDetector
 import org.liftrr.ml.PoseQuality
 import org.liftrr.ui.screens.session.WorkoutMode
 import org.liftrr.utils.DispatcherProvider
+import org.liftrr.utils.KeyFrameCapture
 import javax.inject.Inject
 
 /**
@@ -53,6 +57,7 @@ data class WorkoutUiState(
  */
 @HiltViewModel
 class WorkoutViewModel @Inject constructor(
+    @ApplicationContext private val context: Context,
     val poseDetector: PoseDetector,
     private val workoutReportHolder: org.liftrr.domain.workout.WorkoutReportHolder,
     private val workoutRepository: WorkoutRepository,
@@ -67,6 +72,9 @@ class WorkoutViewModel @Inject constructor(
     // Business logic engine (follows Dependency Inversion Principle)
     private val workoutEngine = WorkoutEngine()
 
+    // Key frame capture for visual feedback
+    private val keyFrameCapture = KeyFrameCapture(context)
+
     // Store the last generated report for summary screen
     private var lastWorkoutReport: WorkoutReport? = null
 
@@ -78,6 +86,10 @@ class WorkoutViewModel @Inject constructor(
 
     // Track if pose detector is already initialized
     private var isPoseDetectorInitialized = false
+
+    // Store latest camera frame for key frame capture
+    private var latestFrameBitmap: Bitmap? = null
+    private var latestFrameTimestamp: Long = 0L
 
     /**
      * Pre-initialize pose detector to reduce startup delay
@@ -116,8 +128,20 @@ class WorkoutViewModel @Inject constructor(
                 poseDetector.poseResults
                     .onEach { result ->
                         withContext(dispatchers.default) {
+                            val previousRepCount = workoutEngine.getRepStats().total
                             val workoutState = workoutEngine.processPoseResult(result)
                             val repStats = workoutEngine.getRepStats()
+                            val currentRepCount = repStats.total
+
+                            // Capture key frame if a rep was just completed
+                            if (currentRepCount > previousRepCount && result is PoseDetectionResult.Success) {
+                                captureKeyFrameIfNeeded(
+                                    result = result,
+                                    repNumber = currentRepCount,
+                                    formScore = workoutState.poseQualityScore,
+                                    formFeedback = workoutState.formFeedback
+                                )
+                            }
 
                             withContext(dispatchers.main) {
                                 _uiState.update {
@@ -150,6 +174,11 @@ class WorkoutViewModel @Inject constructor(
     }
 
     fun processFrame(bitmap: android.graphics.Bitmap, timestamp: Long, release: () -> Unit) {
+        // Store latest frame for key frame capture (only if recording)
+        if (_uiState.value.isRecording) {
+            updateLatestFrame(bitmap, timestamp)
+        }
+
         poseDetector.detectPoseAsync(bitmap, timestamp, release)
     }
 
@@ -178,6 +207,47 @@ class WorkoutViewModel @Inject constructor(
     fun setWeight(w: Float) {
         android.util.Log.d("WorkoutViewModel", "Weight set: $w kg")
         weight = w
+    }
+
+    /**
+     * Store the latest camera frame for potential key frame capture
+     * Called from UI when camera provides a new frame
+     */
+    fun updateLatestFrame(bitmap: Bitmap, timestamp: Long) {
+        // Recycle old bitmap
+        latestFrameBitmap?.recycle()
+        // Make a copy since the original will be recycled by the pool
+        latestFrameBitmap = bitmap.copy(Bitmap.Config.ARGB_8888, false)
+        latestFrameTimestamp = timestamp
+    }
+
+    /**
+     * Capture a key frame if we have the bitmap available
+     */
+    private fun captureKeyFrameIfNeeded(
+        result: PoseDetectionResult.Success,
+        repNumber: Int,
+        formScore: Float,
+        formFeedback: String
+    ) {
+        val bitmap = latestFrameBitmap ?: return
+
+        // Determine form issues from feedback
+        val formIssues = if (formScore < 0.7f) {
+            listOf(formFeedback)
+        } else {
+            emptyList()
+        }
+
+        // Capture this frame for later processing
+        keyFrameCapture.captureFrame(
+            bitmap = bitmap,
+            timestamp = latestFrameTimestamp,
+            repNumber = repNumber,
+            poseData = result,
+            formScore = formScore,
+            formIssues = formIssues
+        )
     }
 
     suspend fun finishWorkout(): WorkoutReport? = withContext(dispatchers.default) {
@@ -209,6 +279,20 @@ class WorkoutViewModel @Inject constructor(
                 null
             }
 
+            // Process and save key frames
+            val keyFrames = keyFrameCapture.processAndSaveKeyFrames(session.id)
+            val keyFramesJson = try {
+                if (keyFrames.isNotEmpty()) {
+                    Gson().toJson(keyFrames)
+                } else null
+            } catch (e: Exception) {
+                android.util.Log.e("WorkoutViewModel", "Failed to serialize key frames", e)
+                null
+            }
+
+            // Clear captured frames to free memory
+            keyFrameCapture.clear()
+
             val entity = WorkoutSessionEntity(
                 sessionId = session.id,
                 exerciseType = report.exerciseType.name,
@@ -223,11 +307,16 @@ class WorkoutViewModel @Inject constructor(
                 weight = weight,
                 timestamp = System.currentTimeMillis(),
                 isUploaded = false,
-                repDataJson = repDataJson
+                repDataJson = repDataJson,
+                keyFramesJson = keyFramesJson
             )
-            android.util.Log.d("WorkoutViewModel", "Saving workout to database with ${repDataList.size} reps, video URI: ${entity.videoUri}, weight: ${entity.weight}")
+            android.util.Log.d("WorkoutViewModel", "Saving workout to database with ${repDataList.size} reps, ${keyFrames.size} key frames, video URI: ${entity.videoUri}, weight: ${entity.weight}")
             workoutRepository.saveWorkout(entity)
         }
+
+        // Clean up latest frame bitmap
+        latestFrameBitmap?.recycle()
+        latestFrameBitmap = null
 
         report
     }

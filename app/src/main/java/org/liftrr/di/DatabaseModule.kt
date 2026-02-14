@@ -27,7 +27,10 @@ object DatabaseModule {
             LiftrrDb::class.java,
             "liftrr-db"
         )
-            .addMigrations(DatabaseMigrations.MIGRATION_6_7)
+            .addMigrations(
+                DatabaseMigrations.MIGRATION_6_7,
+                DatabaseMigrations.MIGRATION_7_8
+            )
             .fallbackToDestructiveMigration(false)
             .build()
     }

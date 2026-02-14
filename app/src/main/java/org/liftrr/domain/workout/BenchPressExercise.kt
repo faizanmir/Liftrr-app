@@ -9,6 +9,7 @@ class BenchPressExercise : Exercise {
 
     private var isAtBottom = false
     private var bottomFrameCount = 0
+    private var topFrameCount = 0  // Track frames at lockout position
     private var lastRepTime = 0L
 
     private val elbowAngleSmoother = AngleSmoother(3)
@@ -21,12 +22,14 @@ class BenchPressExercise : Exercise {
     private var lastFormScore = 100f
 
     companion object {
-        private const val MIN_FRAMES_FOR_STABILITY = 2
-        private const val MIN_REP_DURATION_MS = 600L
+        // Stricter stability requirements to prevent false reps
+        private const val MIN_FRAMES_FOR_STABILITY = 6  // ~200ms at 30fps
+        private const val MIN_REP_DURATION_MS = 1200L   // Minimum 1.2 seconds per rep
+        private const val MIN_FRAMES_AT_TOP = 3         // Must hold lockout position
 
         private const val BOTTOM_ENTRY_ANGLE = 110f
         private const val BOTTOM_EXIT_ANGLE = 130f
-        private const val TOP_ANGLE_THRESHOLD = 155f
+        private const val TOP_ANGLE_THRESHOLD = 160f    // Stricter lockout requirement
 
         private const val GOOD_DEPTH_ANGLE = 110f
         private const val ELBOW_FLARE_MIN = 30f
@@ -107,23 +110,35 @@ class BenchPressExercise : Exercise {
 
         if (isAtBottomPosition) {
             bottomFrameCount++
+            topFrameCount = 0  // Reset top counter when at bottom
             if (bottomFrameCount >= MIN_FRAMES_FOR_STABILITY && !isAtBottom) {
                 isAtBottom = true
             }
-        } else if (smoothedElbow > BOTTOM_EXIT_ANGLE && isAtBottom) {
-            val currentTime = System.currentTimeMillis()
-            if (currentTime - lastRepTime >= MIN_REP_DURATION_MS) {
-                isAtBottom = false
-                bottomFrameCount = 0
-                lastRepTime = currentTime
-                lastFormScore = calculateFormScore()
-                resetRepTracking()
-                return true
-            }
-        }
-
-        if (!isAtBottomPosition) {
+        } else if (smoothedElbow > TOP_ANGLE_THRESHOLD && isAtBottom) {
+            // At top position - increment top frame counter
+            topFrameCount++
             bottomFrameCount = 0
+
+            // Only count rep if held at top for required frames AND minimum duration met
+            if (topFrameCount >= MIN_FRAMES_AT_TOP) {
+                val currentTime = System.currentTimeMillis()
+                if (currentTime - lastRepTime >= MIN_REP_DURATION_MS) {
+                    isAtBottom = false
+                    topFrameCount = 0
+                    lastRepTime = currentTime
+                    lastFormScore = calculateFormScore()
+                    resetRepTracking()
+                    return true
+                }
+            }
+        } else {
+            // In transition zone - reset counters
+            if (!isAtBottomPosition) {
+                bottomFrameCount = 0
+            }
+            if (smoothedElbow <= TOP_ANGLE_THRESHOLD) {
+                topFrameCount = 0
+            }
         }
 
         return false
@@ -165,6 +180,7 @@ class BenchPressExercise : Exercise {
     override fun reset() {
         isAtBottom = false
         bottomFrameCount = 0
+        topFrameCount = 0
         lastRepTime = 0L
         lastFormScore = 100f
         lastSmoothedElbowAngle = 180f

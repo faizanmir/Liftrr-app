@@ -12,4 +12,10 @@ object DatabaseMigrations {
             db.execSQL("CREATE INDEX IF NOT EXISTS index_workout_sessions_isDeleted ON workout_sessions(isDeleted)")
         }
     }
+
+    val MIGRATION_7_8 = object : Migration(7, 8) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            db.execSQL("ALTER TABLE workout_sessions ADD COLUMN keyFramesJson TEXT")
+        }
+    }
 }

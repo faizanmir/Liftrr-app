@@ -5,7 +5,7 @@ import androidx.room.RoomDatabase
 import org.liftrr.data.models.UserDto
 import org.liftrr.data.models.WorkoutSessionEntity
 
-@Database(entities = [UserDto::class, WorkoutSessionEntity::class], version = 7, exportSchema = false)
+@Database(entities = [UserDto::class, WorkoutSessionEntity::class], version = 8, exportSchema = false)
 abstract class LiftrrDb : RoomDatabase() {
     abstract fun userDao(): UserDao
     abstract fun workoutDao(): WorkoutDao

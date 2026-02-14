@@ -22,12 +22,16 @@ interface Exercise {
  * - Lighting conditions affect landmark detection on one side
  */
 object BilateralAngleCalculator {
-    // Lower threshold (30%) to handle partially occluded poses
-    // This allows tracking even when one side is partially hidden
-    private const val MIN_VISIBILITY_THRESHOLD = 0.3f
+    // Balanced threshold (40%) - strict enough to reject bad occlusion data
+    // but lenient enough to handle partial visibility
+    private const val MIN_VISIBILITY_THRESHOLD = 0.4f
 
     // Minimum landmarks needed - if we have at least this many, attempt tracking
-    private const val MIN_LANDMARK_CONFIDENCE = 0.2f
+    private const val MIN_LANDMARK_CONFIDENCE = 0.25f
+
+    // Angle validation - reject clearly impossible angles
+    private const val MIN_VALID_ANGLE = 0f
+    private const val MAX_VALID_ANGLE = 200f
 
     /**
      * Calculate angle using both sides and average them, or use the more visible side.
@@ -49,12 +53,17 @@ object BilateralAngleCalculator {
         val leftVisibility = getAverageVisibility(leftPoint1, leftPoint2, leftPoint3)
         val rightVisibility = getAverageVisibility(rightPoint1, rightPoint2, rightPoint3)
 
+        // Calculate angles and validate they're within possible range
         val leftAngle = if (leftPoint1 != null && leftPoint2 != null && leftPoint3 != null) {
-            PoseAnalyzer.calculateAngle(leftPoint1, leftPoint2, leftPoint3)
+            val angle = PoseAnalyzer.calculateAngle(leftPoint1, leftPoint2, leftPoint3)
+            // Reject impossible angles (likely from occlusion errors)
+            if (angle in MIN_VALID_ANGLE..MAX_VALID_ANGLE) angle else null
         } else null
 
         val rightAngle = if (rightPoint1 != null && rightPoint2 != null && rightPoint3 != null) {
-            PoseAnalyzer.calculateAngle(rightPoint1, rightPoint2, rightPoint3)
+            val angle = PoseAnalyzer.calculateAngle(rightPoint1, rightPoint2, rightPoint3)
+            // Reject impossible angles (likely from occlusion errors)
+            if (angle in MIN_VALID_ANGLE..MAX_VALID_ANGLE) angle else null
         } else null
 
         return when {

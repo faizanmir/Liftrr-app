@@ -1,16 +1,20 @@
 package org.liftrr.ui.screens.workout
 
+import android.content.Context
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
+import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import org.liftrr.data.repository.WorkoutRepository
 import org.liftrr.domain.analytics.WorkoutReport
 import org.liftrr.ml.WorkoutLLM
 import org.liftrr.utils.DispatcherProvider
+import org.liftrr.utils.WorkoutReportExporter
 import javax.inject.Inject
 
 /**
@@ -18,7 +22,9 @@ import javax.inject.Inject
  */
 @HiltViewModel
 class WorkoutSummaryViewModel @Inject constructor(
+    @ApplicationContext private val context: Context,
     private val workoutLLM: WorkoutLLM,
+    private val workoutRepository: WorkoutRepository,
     private val dispatchers: DispatcherProvider
 ) : ViewModel() {
 
@@ -33,6 +39,9 @@ class WorkoutSummaryViewModel @Inject constructor(
 
     private val _isInitializing = MutableStateFlow(false)
     val isInitializing: StateFlow<Boolean> = _isInitializing.asStateFlow()
+
+    private val _isExporting = MutableStateFlow(false)
+    val isExporting: StateFlow<Boolean> = _isExporting.asStateFlow()
 
     private var isLLMInitialized = false
 
@@ -140,6 +149,60 @@ class WorkoutSummaryViewModel @Inject constructor(
      */
     fun retryInsights(report: WorkoutReport) {
         generateInsights(report)
+    }
+
+    /**
+     * Export and share workout report as PDF with key frames
+     */
+    fun shareAsPdf(report: WorkoutReport) {
+        viewModelScope.launch(dispatchers.io) {
+            try {
+                _isExporting.value = true
+                android.util.Log.d("WorkoutSummaryVM", "Starting PDF export for session ${report.sessionId}")
+
+                // Load key frames from database
+                val workout = workoutRepository.getWorkoutById(report.sessionId)
+                val keyFramesJson = workout?.keyFramesJson
+                android.util.Log.d("WorkoutSummaryVM", "Loaded workout, keyFrames present: ${keyFramesJson != null}")
+
+                val pdfFile = WorkoutReportExporter.exportAsPdf(context, report, keyFramesJson)
+                android.util.Log.d("WorkoutSummaryVM", "PDF created at: ${pdfFile.absolutePath}, exists: ${pdfFile.exists()}")
+
+                withContext(dispatchers.main) {
+                    WorkoutReportExporter.shareReport(context, pdfFile, "application/pdf")
+                    android.util.Log.d("WorkoutSummaryVM", "Share intent launched")
+                }
+            } catch (e: Exception) {
+                android.util.Log.e("WorkoutSummaryVM", "Failed to share PDF", e)
+                e.printStackTrace()
+            } finally {
+                _isExporting.value = false
+            }
+        }
+    }
+
+    /**
+     * Share workout report as plain text
+     */
+    fun shareAsText(report: WorkoutReport) {
+        viewModelScope.launch(dispatchers.io) {
+            try {
+                _isExporting.value = true
+                android.util.Log.d("WorkoutSummaryVM", "Exporting text report for session ${report.sessionId}")
+                val text = WorkoutReportExporter.exportAsText(report)
+                android.util.Log.d("WorkoutSummaryVM", "Text report created, length: ${text.length}")
+
+                withContext(dispatchers.main) {
+                    WorkoutReportExporter.shareAsText(context, text)
+                    android.util.Log.d("WorkoutSummaryVM", "Share text intent launched")
+                }
+            } catch (e: Exception) {
+                android.util.Log.e("WorkoutSummaryVM", "Failed to share text", e)
+                e.printStackTrace()
+            } finally {
+                _isExporting.value = false
+            }
+        }
     }
 }
 

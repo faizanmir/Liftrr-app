@@ -29,6 +29,7 @@ data class WorkoutSessionEntity(
     val timestamp: Long,
     val isUploaded: Boolean = false,
     val repDataJson: String? = null,
+    val keyFramesJson: String? = null,  // Serialized list of KeyFrame objects
     val isDeleted: Boolean = false,
     val deletedAt: Long? = null
 )

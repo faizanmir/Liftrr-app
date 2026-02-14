@@ -54,6 +54,7 @@ fun WorkoutPlaybackScreen(
     viewModel: WorkoutPlaybackViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsState()
+    val isExporting by viewModel.isExporting.collectAsState()
 
     LaunchedEffect(sessionId) {
         viewModel.loadWorkoutSession(sessionId)
@@ -77,6 +78,54 @@ fun WorkoutPlaybackScreen(
                                     Icons.AutoMirrored.Filled.ArrowBack,
                                     contentDescription = "Back"
                                 )
+                            }
+                        },
+                        actions = {
+                            // Share button with dropdown menu (only show when data is loaded)
+                            if (uiState is PlaybackUiState.Success) {
+                                var showShareMenu by remember { mutableStateOf(false) }
+                                val workoutData = (uiState as PlaybackUiState.Success).workoutData
+
+                                Box {
+                                    IconButton(onClick = { showShareMenu = true }) {
+                                        Icon(
+                                            imageVector = Icons.Default.Share,
+                                            contentDescription = "Share workout"
+                                        )
+                                    }
+
+                                    DropdownMenu(
+                                        expanded = showShareMenu,
+                                        onDismissRequest = { showShareMenu = false }
+                                    ) {
+                                        DropdownMenuItem(
+                                            text = { Text("Share as PDF") },
+                                            onClick = {
+                                                showShareMenu = false
+                                                viewModel.shareAsPdf(workoutData.sessionId)
+                                            },
+                                            leadingIcon = {
+                                                Icon(
+                                                    imageVector = Icons.Default.PictureAsPdf,
+                                                    contentDescription = null
+                                                )
+                                            }
+                                        )
+                                        DropdownMenuItem(
+                                            text = { Text("Share as Text") },
+                                            onClick = {
+                                                showShareMenu = false
+                                                viewModel.shareAsText(workoutData)
+                                            },
+                                            leadingIcon = {
+                                                Icon(
+                                                    imageVector = Icons.Default.TextFields,
+                                                    contentDescription = null
+                                                )
+                                            }
+                                        )
+                                    }
+                                }
                             }
                         },
                         colors = TopAppBarDefaults.topAppBarColors(
@@ -128,6 +177,28 @@ fun WorkoutPlaybackScreen(
                         modifier = Modifier.padding(padding),
                         isFullscreen = isFullscreen,
                         onFullscreenChange = { isFullscreen = it }
+                    )
+                }
+            }
+        }
+
+        // Loading overlay while exporting report
+        if (isExporting) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.9f)),
+                contentAlignment = Alignment.Center
+            ) {
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(16.dp)
+                ) {
+                    CircularProgressIndicator()
+                    Text(
+                        text = "Preparing report...",
+                        style = MaterialTheme.typography.bodyLarge,
+                        color = MaterialTheme.colorScheme.onSurface
                     )
                 }
             }

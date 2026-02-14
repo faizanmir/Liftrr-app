@@ -25,8 +25,10 @@ import androidx.compose.material.icons.filled.EmojiEvents
 import androidx.compose.material.icons.filled.Error
 import androidx.compose.material.icons.filled.FitnessCenter
 import androidx.compose.material.icons.filled.Lightbulb
+import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Psychology
 import androidx.compose.material.icons.filled.Schedule
+import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.TrendingUp
 import androidx.compose.material3.*
 import androidx.activity.compose.BackHandler
@@ -34,6 +36,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -74,6 +79,7 @@ fun WorkoutSummaryScreen(
     val aiRecommendations by viewModel.aiRecommendations.collectAsState()
     val motivationalMessage by viewModel.motivationalMessage.collectAsState()
     val isInitializing by viewModel.isInitializing.collectAsState()
+    val isExporting by viewModel.isExporting.collectAsState()
 
     // System back should go to Home (same as toolbar back)
     BackHandler { onNavigateBack() }
@@ -84,6 +90,8 @@ fun WorkoutSummaryScreen(
             viewModel.generateInsights(report)
         }
     }
+    var showShareMenu by remember { mutableStateOf(false) }
+
     Box(modifier = Modifier.fillMaxSize()) {
         Scaffold(
             containerColor = MaterialTheme.colorScheme.surface,
@@ -96,6 +104,43 @@ fun WorkoutSummaryScreen(
                                 imageVector = Icons.AutoMirrored.Filled.ArrowBack,
                                 contentDescription = "Back"
                             )
+                        }
+                    },
+                    actions = {
+                        // Share menu
+                        Box {
+                            IconButton(onClick = { showShareMenu = true }) {
+                                Icon(
+                                    imageVector = Icons.Default.Share,
+                                    contentDescription = "Share report"
+                                )
+                            }
+
+                            DropdownMenu(
+                                expanded = showShareMenu,
+                                onDismissRequest = { showShareMenu = false }
+                            ) {
+                                DropdownMenuItem(
+                                    text = { Text("Share as PDF") },
+                                    onClick = {
+                                        showShareMenu = false
+                                        viewModel.shareAsPdf(report)
+                                    },
+                                    leadingIcon = {
+                                        Icon(Icons.Default.Share, contentDescription = null)
+                                    }
+                                )
+                                DropdownMenuItem(
+                                    text = { Text("Share as Text") },
+                                    onClick = {
+                                        showShareMenu = false
+                                        viewModel.shareAsText(report)
+                                    },
+                                    leadingIcon = {
+                                        Icon(Icons.Default.Share, contentDescription = null)
+                                    }
+                                )
+                            }
                         }
                     },
                     colors = TopAppBarDefaults.topAppBarColors(
@@ -223,6 +268,28 @@ fun WorkoutSummaryScreen(
         // Full-screen loading overlay while LLM is initializing
         if (isInitializing) {
             LLMInitializingOverlay()
+        }
+
+        // Loading overlay while exporting report
+        if (isExporting) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.9f)),
+                contentAlignment = Alignment.Center
+            ) {
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(16.dp)
+                ) {
+                    CircularProgressIndicator()
+                    Text(
+                        text = "Preparing report...",
+                        style = MaterialTheme.typography.bodyLarge,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                }
+            }
         }
     }
 }
