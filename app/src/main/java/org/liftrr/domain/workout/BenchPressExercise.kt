@@ -177,6 +177,39 @@ class BenchPressExercise : Exercise {
         repMaxLockoutAngle = 0f
     }
 
+    override fun detectMovementPhase(pose: PoseDetectionResult.Success): MovementPhase {
+        val landmarks = pose.landmarks
+        val leftShoulder = landmarks.getOrNull(11)
+        val leftElbow = landmarks.getOrNull(13)
+        val leftWrist = landmarks.getOrNull(15)
+        val rightShoulder = landmarks.getOrNull(12)
+        val rightElbow = landmarks.getOrNull(14)
+        val rightWrist = landmarks.getOrNull(16)
+
+        // Use bilateral angle calculation for elbow angle
+        val elbowAngle = BilateralAngleCalculator.calculateBilateralAngle(
+            leftShoulder, leftElbow, leftWrist,
+            rightShoulder, rightElbow, rightWrist
+        ) ?: return MovementPhase.TRANSITION
+
+        return when {
+            // Lockout position (elbow angle > 160°)
+            elbowAngle >= 160f -> MovementPhase.LOCKOUT
+
+            // Bottom position (elbow angle 60-90° - bar at chest)
+            elbowAngle in 60f..90f -> MovementPhase.BOTTOM
+
+            // Descent phase (elbow angle 120-160°, lowering bar)
+            elbowAngle in 120f..160f && !isAtBottom -> MovementPhase.DESCENT
+
+            // Ascent phase (elbow angle 90-150°, pressing up)
+            elbowAngle in 90f..150f && isAtBottom -> MovementPhase.ASCENT
+
+            // Transitional positions
+            else -> MovementPhase.TRANSITION
+        }
+    }
+
     override fun reset() {
         isAtBottom = false
         bottomFrameCount = 0

@@ -9,7 +9,8 @@ data class KeyFrame(
     val frameType: KeyFrameType,
     val imagePath: String,  // Path to saved image with skeletal overlay
     val description: String,
-    val formScore: Float? = null
+    val formScore: Float? = null,
+    val movementPhase: MovementPhase? = null  // Phase of movement (setup, bottom, lockout, etc.)
 )
 
 /**
@@ -28,6 +29,18 @@ enum class KeyFrameType {
 }
 
 /**
+ * Represents different phases of a lift movement
+ */
+enum class MovementPhase {
+    SETUP,          // Starting position before movement begins
+    DESCENT,        // Descending/lowering phase (squat down, bar down, etc.)
+    BOTTOM,         // Deepest/lowest point of the movement
+    ASCENT,         // Ascending/rising phase (squat up, bar up, etc.)
+    LOCKOUT,        // Completion/top position with full extension
+    TRANSITION      // Transitional positions between phases
+}
+
+/**
  * Metadata for captured frames during workout
  */
 data class CapturedFrame(
@@ -36,5 +49,6 @@ data class CapturedFrame(
     val repNumber: Int,
     val poseData: org.liftrr.ml.PoseDetectionResult.Success,
     val formScore: Float,
-    val formIssues: List<String>
+    val formIssues: List<String>,
+    val movementPhase: MovementPhase = MovementPhase.LOCKOUT  // Default to lockout for backward compatibility
 )

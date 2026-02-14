@@ -21,6 +21,7 @@ import org.liftrr.data.repository.WorkoutRepository
 import org.liftrr.domain.analytics.WorkoutAnalyzer
 import org.liftrr.domain.analytics.WorkoutReport
 import org.liftrr.domain.analytics.WorkoutSession
+import org.liftrr.domain.workout.MovementPhase
 import org.liftrr.domain.workout.RepData
 import org.liftrr.domain.workout.WorkoutEngine
 import org.liftrr.ml.ExerciseType
@@ -91,6 +92,10 @@ class WorkoutViewModel @Inject constructor(
     private var latestFrameBitmap: Bitmap? = null
     private var latestFrameTimestamp: Long = 0L
 
+    // Track which phases have been captured for the current rep
+    private val capturedPhasesThisRep = mutableSetOf<MovementPhase>()
+    private var lastRepNumber = 0
+
     /**
      * Pre-initialize pose detector to reduce startup delay
      * Called early (e.g., on WorkoutPreparationScreen) to prepare for workout
@@ -133,9 +138,15 @@ class WorkoutViewModel @Inject constructor(
                             val repStats = workoutEngine.getRepStats()
                             val currentRepCount = repStats.total
 
-                            // Capture key frame if a rep was just completed
-                            if (currentRepCount > previousRepCount && result is PoseDetectionResult.Success) {
-                                captureKeyFrameIfNeeded(
+                            // Reset captured phases when starting a new rep
+                            if (currentRepCount != lastRepNumber) {
+                                capturedPhasesThisRep.clear()
+                                lastRepNumber = currentRepCount
+                            }
+
+                            // Capture frames at different phases during the rep
+                            if (result is PoseDetectionResult.Success && _uiState.value.isRecording && currentRepCount > 0) {
+                                capturePhaseFrameIfNeeded(
                                     result = result,
                                     repNumber = currentRepCount,
                                     formScore = workoutState.poseQualityScore,
@@ -222,9 +233,10 @@ class WorkoutViewModel @Inject constructor(
     }
 
     /**
-     * Capture a key frame if we have the bitmap available
+     * Capture frames at different phases of the movement
+     * Detects current phase and captures if not already captured this rep
      */
-    private fun captureKeyFrameIfNeeded(
+    private fun capturePhaseFrameIfNeeded(
         result: PoseDetectionResult.Success,
         repNumber: Int,
         formScore: Float,
@@ -232,22 +244,41 @@ class WorkoutViewModel @Inject constructor(
     ) {
         val bitmap = latestFrameBitmap ?: return
 
-        // Determine form issues from feedback
-        val formIssues = if (formScore < 0.7f) {
-            listOf(formFeedback)
-        } else {
-            emptyList()
-        }
+        // Detect current movement phase
+        val currentPhase = workoutEngine.getCurrentExercise()?.detectMovementPhase(result) ?: return
 
-        // Capture this frame for later processing
-        keyFrameCapture.captureFrame(
-            bitmap = bitmap,
-            timestamp = latestFrameTimestamp,
-            repNumber = repNumber,
-            poseData = result,
-            formScore = formScore,
-            formIssues = formIssues
+        // Define which phases we want to capture (4-5 key phases)
+        val importantPhases = setOf(
+            MovementPhase.SETUP,
+            MovementPhase.DESCENT,
+            MovementPhase.BOTTOM,
+            MovementPhase.ASCENT,
+            MovementPhase.LOCKOUT
         )
+
+        // Only capture if this is an important phase and we haven't captured it yet for this rep
+        if (currentPhase in importantPhases && currentPhase !in capturedPhasesThisRep) {
+            // Determine form issues from feedback
+            val formIssues = if (formScore < 0.7f) {
+                listOf(formFeedback)
+            } else {
+                emptyList()
+            }
+
+            // Capture this frame for later processing
+            keyFrameCapture.captureFrame(
+                bitmap = bitmap,
+                timestamp = latestFrameTimestamp,
+                repNumber = repNumber,
+                poseData = result,
+                formScore = formScore,
+                formIssues = formIssues,
+                movementPhase = currentPhase
+            )
+
+            // Mark this phase as captured for this rep
+            capturedPhasesThisRep.add(currentPhase)
+        }
     }
 
     suspend fun finishWorkout(): WorkoutReport? = withContext(dispatchers.default) {

@@ -214,6 +214,39 @@ class DeadliftExercise : Exercise {
         repMaxLockoutAngle = 0f
     }
 
+    override fun detectMovementPhase(pose: PoseDetectionResult.Success): MovementPhase {
+        val landmarks = pose.landmarks
+        val leftShoulder = landmarks.getOrNull(11)
+        val leftHip = landmarks.getOrNull(23)
+        val leftKnee = landmarks.getOrNull(25)
+        val rightShoulder = landmarks.getOrNull(12)
+        val rightHip = landmarks.getOrNull(24)
+        val rightKnee = landmarks.getOrNull(26)
+
+        // Use bilateral angle calculation
+        val hipAngle = BilateralAngleCalculator.calculateBilateralAngle(
+            leftShoulder, leftHip, leftKnee,
+            rightShoulder, rightHip, rightKnee
+        ) ?: return MovementPhase.TRANSITION
+
+        return when {
+            // Lockout/Standing position (hip angle > 160°)
+            hipAngle >= 160f -> MovementPhase.LOCKOUT
+
+            // Setup/Starting position (hip angle 80-120° - hinged position)
+            hipAngle in 80f..120f && !isAtBottom -> MovementPhase.SETUP
+
+            // Bottom position/Breaking from floor (hip angle 60-85°)
+            hipAngle in 60f..85f -> MovementPhase.BOTTOM
+
+            // Mid-pull ascending (hip angle 120-160°)
+            hipAngle in 120f..160f && isAtBottom -> MovementPhase.ASCENT
+
+            // Transitional positions
+            else -> MovementPhase.TRANSITION
+        }
+    }
+
     override fun reset() {
         isAtBottom = false
         bottomFrameCount = 0

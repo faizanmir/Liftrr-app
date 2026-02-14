@@ -20,7 +20,7 @@ class KeyFrameCapture(private val context: Context) {
     private val TAG = "KeyFrameCapture"
 
     /**
-     * Capture a frame during workout
+     * Capture a frame during workout with phase information
      */
     fun captureFrame(
         bitmap: Bitmap,
@@ -28,7 +28,8 @@ class KeyFrameCapture(private val context: Context) {
         repNumber: Int,
         poseData: PoseDetectionResult.Success,
         formScore: Float,
-        formIssues: List<String>
+        formIssues: List<String>,
+        movementPhase: org.liftrr.domain.workout.MovementPhase = org.liftrr.domain.workout.MovementPhase.LOCKOUT
     ) {
         capturedFrames.add(
             CapturedFrame(
@@ -37,13 +38,15 @@ class KeyFrameCapture(private val context: Context) {
                 repNumber = repNumber,
                 poseData = poseData,
                 formScore = formScore,
-                formIssues = formIssues
+                formIssues = formIssues,
+                movementPhase = movementPhase
             )
         )
     }
 
     /**
      * Process and save key frames at end of workout
+     * Captures multiple phases per rep for best/worst/medium reps
      * Returns list of KeyFrame metadata with minimum 10 frames for quality analysis
      */
     fun processAndSaveKeyFrames(sessionId: String): List<KeyFrame> {
@@ -53,7 +56,6 @@ class KeyFrameCapture(private val context: Context) {
         }
 
         val keyFrames = mutableListOf<KeyFrame>()
-        val savedFrames = mutableSetOf<CapturedFrame>()  // Track already saved frames
 
         try {
             // Create directory for this session's frames
@@ -62,156 +64,114 @@ class KeyFrameCapture(private val context: Context) {
                 framesDir.mkdirs()
             }
 
-            // 1. Best rep (highest form score)
-            val bestFrame = capturedFrames.maxByOrNull { it.formScore }
-            bestFrame?.let { frame ->
-                val savedPath = saveFrameWithOverlay(
-                    frame,
-                    framesDir,
-                    "01_best_rep",
-                    goodForm = true
-                )
-                savedPath?.let {
-                    keyFrames.add(
-                        KeyFrame(
-                            timestamp = frame.timestamp,
-                            repNumber = frame.repNumber,
-                            frameType = KeyFrameType.BEST_REP,
-                            imagePath = it,
-                            description = "Best Rep #${frame.repNumber} - Form Score: ${(frame.formScore * 100).toInt()}%",
-                            formScore = frame.formScore
-                        )
-                    )
-                    savedFrames.add(frame)
-                }
+            // Group frames by rep number
+            val framesByRep = capturedFrames.groupBy { it.repNumber }
+
+            // Calculate average form score per rep
+            val repScores = framesByRep.mapValues { (_, frames) ->
+                frames.map { it.formScore }.average().toFloat()
             }
 
-            // 2. Worst rep (lowest form score)
-            val worstFrame = capturedFrames.minByOrNull { it.formScore }
-            worstFrame?.let { frame ->
-                if (frame !in savedFrames) {
-                    val savedPath = saveFrameWithOverlay(
-                        frame,
-                        framesDir,
-                        "02_worst_rep",
-                        goodForm = false
-                    )
-                    savedPath?.let {
-                        keyFrames.add(
-                            KeyFrame(
-                                timestamp = frame.timestamp,
-                                repNumber = frame.repNumber,
-                                frameType = KeyFrameType.WORST_REP,
-                                imagePath = it,
-                                description = "Worst Rep #${frame.repNumber} - Form Score: ${(frame.formScore * 100).toInt()}%\nIssues: ${frame.formIssues.joinToString(", ")}",
-                                formScore = frame.formScore
+            // Select reps for detailed analysis: best, worst, and medium
+            val sortedReps = repScores.entries.sortedByDescending { it.value }
+            val bestRepNumber = sortedReps.firstOrNull()?.key
+            val worstRepNumber = sortedReps.lastOrNull()?.key
+            val mediumRepNumber = sortedReps.getOrNull(sortedReps.size / 2)?.key
+
+            val selectedReps = setOfNotNull(bestRepNumber, worstRepNumber, mediumRepNumber)
+
+            // Save all phases for selected reps (best, worst, medium)
+            selectedReps.forEach { repNumber ->
+                val repFrames = framesByRep[repNumber] ?: return@forEach
+                val avgScore = repScores[repNumber] ?: 0f
+                val isGoodForm = avgScore >= 0.7f
+
+                val frameType = when (repNumber) {
+                    bestRepNumber -> KeyFrameType.BEST_REP
+                    worstRepNumber -> KeyFrameType.WORST_REP
+                    else -> KeyFrameType.REFERENCE
+                }
+
+                val prefix = when (repNumber) {
+                    bestRepNumber -> "01_best"
+                    worstRepNumber -> "02_worst"
+                    else -> "03_medium"
+                }
+
+                // Save each phase for this rep
+                val phaseOrder = listOf(
+                    org.liftrr.domain.workout.MovementPhase.SETUP,
+                    org.liftrr.domain.workout.MovementPhase.DESCENT,
+                    org.liftrr.domain.workout.MovementPhase.BOTTOM,
+                    org.liftrr.domain.workout.MovementPhase.ASCENT,
+                    org.liftrr.domain.workout.MovementPhase.LOCKOUT
+                )
+
+                phaseOrder.forEach { phase ->
+                    // Find the best frame for this phase
+                    val phaseFrame = repFrames.filter { it.movementPhase == phase }
+                        .maxByOrNull { it.formScore }
+
+                    phaseFrame?.let { frame ->
+                        val phaseName = phase.name.lowercase().replaceFirstChar { it.uppercase() }
+                        val savedPath = saveFrameWithOverlay(
+                            frame,
+                            framesDir,
+                            "${prefix}_rep${repNumber}_${phase.name.lowercase()}",
+                            goodForm = isGoodForm
+                        )
+
+                        savedPath?.let {
+                            keyFrames.add(
+                                KeyFrame(
+                                    timestamp = frame.timestamp,
+                                    repNumber = repNumber,
+                                    frameType = frameType,
+                                    imagePath = it,
+                                    description = "$phaseName Phase - Rep #$repNumber - Score: ${(frame.formScore * 100).toInt()}%",
+                                    formScore = frame.formScore,
+                                    movementPhase = phase
+                                )
                             )
-                        )
-                        savedFrames.add(frame)
-                    }
-                }
-            }
-
-            // 3. Top 4 form issue examples (diverse issues)
-            val issueFrames = capturedFrames
-                .filter { it.formIssues.isNotEmpty() && it !in savedFrames }
-                .sortedBy { it.formScore }  // Worst form issues first
-                .take(4)
-
-            issueFrames.forEachIndexed { index, frame ->
-                val savedPath = saveFrameWithOverlay(
-                    frame,
-                    framesDir,
-                    "03_form_issue_${index + 1}",
-                    goodForm = false
-                )
-                savedPath?.let {
-                    keyFrames.add(
-                        KeyFrame(
-                            timestamp = frame.timestamp,
-                            repNumber = frame.repNumber,
-                            frameType = KeyFrameType.FORM_ISSUE,
-                            imagePath = it,
-                            description = "Rep #${frame.repNumber} - Issue: ${frame.formIssues.firstOrNull() ?: "Form break"}\nScore: ${(frame.formScore * 100).toInt()}%",
-                            formScore = frame.formScore
-                        )
-                    )
-                    savedFrames.add(frame)
-                }
-            }
-
-            // 4. Progressive samples throughout workout (early, mid, late)
-            // This shows performance progression
-            val remainingFrames = capturedFrames.filter { it !in savedFrames }
-            if (remainingFrames.isNotEmpty()) {
-                val progressiveFrames = listOf(
-                    remainingFrames.firstOrNull(),  // Early rep
-                    remainingFrames.getOrNull(remainingFrames.size / 3),  // First third
-                    remainingFrames.getOrNull(remainingFrames.size / 2),  // Middle
-                    remainingFrames.getOrNull(2 * remainingFrames.size / 3),  // Last third
-                    remainingFrames.lastOrNull()  // Final rep
-                ).filterNotNull().distinct()
-
-                progressiveFrames.forEachIndexed { index, frame ->
-                    val savedPath = saveFrameWithOverlay(
-                        frame,
-                        framesDir,
-                        "04_progression_${index + 1}",
-                        goodForm = frame.formScore >= 0.7f
-                    )
-                    savedPath?.let {
-                        val position = when (index) {
-                            0 -> "Early"
-                            progressiveFrames.size - 1 -> "Final"
-                            else -> "Mid"
                         }
-                        keyFrames.add(
-                            KeyFrame(
-                                timestamp = frame.timestamp,
-                                repNumber = frame.repNumber,
-                                frameType = KeyFrameType.PROGRESSION,
-                                imagePath = it,
-                                description = "$position Rep #${frame.repNumber} - Form Score: ${(frame.formScore * 100).toInt()}%",
-                                formScore = frame.formScore
-                            )
-                        )
-                        savedFrames.add(frame)
                     }
                 }
             }
 
-            // 5. If we still don't have 10 frames, add more samples
+            // If we don't have enough frames (minimum 10), add some single-phase frames from other reps
             val MIN_FRAMES = 10
             if (keyFrames.size < MIN_FRAMES) {
                 val additionalNeeded = MIN_FRAMES - keyFrames.size
-                val additionalFrames = capturedFrames
-                    .filter { it !in savedFrames }
-                    .sortedByDescending { it.formScore }  // Take best remaining frames
-                    .take(additionalNeeded)
+                val remainingReps = framesByRep.keys.filterNot { it in selectedReps }
 
-                additionalFrames.forEachIndexed { index, frame ->
+                remainingReps.take(additionalNeeded).forEach { repNumber ->
+                    val frames = framesByRep[repNumber] ?: return@forEach
+                    val bestFrame = frames.maxByOrNull { it.formScore } ?: return@forEach
+
                     val savedPath = saveFrameWithOverlay(
-                        frame,
+                        bestFrame,
                         framesDir,
-                        "05_additional_${index + 1}",
-                        goodForm = frame.formScore >= 0.7f
+                        "04_additional_rep${repNumber}",
+                        goodForm = bestFrame.formScore >= 0.7f
                     )
+
                     savedPath?.let {
                         keyFrames.add(
                             KeyFrame(
-                                timestamp = frame.timestamp,
-                                repNumber = frame.repNumber,
+                                timestamp = bestFrame.timestamp,
+                                repNumber = repNumber,
                                 frameType = KeyFrameType.REFERENCE,
                                 imagePath = it,
-                                description = "Rep #${frame.repNumber} - Form Score: ${(frame.formScore * 100).toInt()}%",
-                                formScore = frame.formScore
+                                description = "Rep #$repNumber - ${bestFrame.movementPhase.name.lowercase().replaceFirstChar { it.uppercase() }} - Score: ${(bestFrame.formScore * 100).toInt()}%",
+                                formScore = bestFrame.formScore,
+                                movementPhase = bestFrame.movementPhase
                             )
                         )
                     }
                 }
             }
 
-            Log.d(TAG, "Saved ${keyFrames.size} key frames for session $sessionId (${capturedFrames.size} total reps)")
+            Log.d(TAG, "Saved ${keyFrames.size} key frames for session $sessionId from ${framesByRep.size} reps with ${capturedFrames.size} total frames")
 
         } catch (e: Exception) {
             Log.e(TAG, "Error processing key frames", e)

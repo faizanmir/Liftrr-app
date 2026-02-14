@@ -207,6 +207,39 @@ class SquatExercise : Exercise {
         repMaxKneeValgus = 0f
     }
 
+    override fun detectMovementPhase(pose: PoseDetectionResult.Success): MovementPhase {
+        val landmarks = pose.landmarks
+        val leftHip = landmarks.getOrNull(23)
+        val leftKnee = landmarks.getOrNull(25)
+        val leftAnkle = landmarks.getOrNull(27)
+        val rightHip = landmarks.getOrNull(24)
+        val rightKnee = landmarks.getOrNull(26)
+        val rightAnkle = landmarks.getOrNull(27)
+
+        // Use bilateral angle calculation for knee angle
+        val kneeAngle = BilateralAngleCalculator.calculateBilateralAngle(
+            leftHip, leftKnee, leftAnkle,
+            rightHip, rightKnee, rightAnkle
+        ) ?: return MovementPhase.TRANSITION
+
+        return when {
+            // Lockout/Standing position (knee angle > 160°)
+            kneeAngle >= 160f -> MovementPhase.LOCKOUT
+
+            // Bottom position (knee angle < 90° - deep squat)
+            kneeAngle < 90f -> MovementPhase.BOTTOM
+
+            // Descent phase (knee angle 120-160°, going down)
+            kneeAngle in 120f..160f && !isAtBottom -> MovementPhase.DESCENT
+
+            // Ascent phase (knee angle 90-150°, coming up)
+            kneeAngle in 90f..150f && isAtBottom -> MovementPhase.ASCENT
+
+            // Transitional positions
+            else -> MovementPhase.TRANSITION
+        }
+    }
+
     override fun reset() {
         isAtBottom = false
         bottomFrameCount = 0

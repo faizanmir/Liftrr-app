@@ -10,6 +10,12 @@ interface Exercise {
     fun hadGoodForm(): Boolean
     fun formScore(): Float
     fun reset()
+
+    /**
+     * Detect the current phase of the movement based on joint angles
+     * Used for capturing key frames at different phases of the lift
+     */
+    fun detectMovementPhase(pose: PoseDetectionResult.Success): MovementPhase
 }
 
 /**

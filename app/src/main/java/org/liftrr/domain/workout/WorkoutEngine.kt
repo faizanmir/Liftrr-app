@@ -163,6 +163,11 @@ class WorkoutEngine {
             bad = badReps
         )
     }
+
+    /**
+     * Get the current exercise instance for phase detection
+     */
+    fun getCurrentExercise(): Exercise? = currentExercise
 }
 
 /**

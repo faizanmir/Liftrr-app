@@ -13,6 +13,7 @@ import com.google.gson.reflect.TypeToken
 import org.liftrr.domain.analytics.ExerciseSpecificMetrics
 import org.liftrr.domain.analytics.WorkoutReport
 import org.liftrr.domain.workout.KeyFrame
+import org.liftrr.domain.workout.KeyFrameType
 import java.io.File
 import java.io.FileOutputStream
 import java.text.SimpleDateFormat
@@ -331,9 +332,137 @@ object WorkoutReportExporter {
     }
 
     /**
-     * Add a page with key frame images
+     * Add pages with side-by-side phase comparison of good vs bad form
      */
     private fun addKeyFramesPage(
+        pdfDocument: PdfDocument,
+        keyFrames: List<KeyFrame>,
+        headerPaint: Paint,
+        textPaint: Paint,
+        leftMargin: Float
+    ) {
+        if (keyFrames.isEmpty()) return
+
+        // Group frames by movement phase
+        val framesByPhase = keyFrames.filter { it.movementPhase != null }
+            .groupBy { it.movementPhase!! }
+
+        // Find best and worst rep numbers
+        val bestRepFrames = keyFrames.filter { it.frameType == KeyFrameType.BEST_REP }
+        val worstRepFrames = keyFrames.filter { it.frameType == KeyFrameType.WORST_REP }
+
+        if (bestRepFrames.isEmpty() || worstRepFrames.isEmpty()) {
+            // Fallback to old behavior if no phase-based frames
+            addLegacyKeyFramesPage(pdfDocument, keyFrames, headerPaint, textPaint, leftMargin)
+            return
+        }
+
+        val bestRepNumber = bestRepFrames.firstOrNull()?.repNumber
+        val worstRepNumber = worstRepFrames.firstOrNull()?.repNumber
+
+        var pageNumber = 2
+        val phaseOrder = listOf(
+            org.liftrr.domain.workout.MovementPhase.SETUP,
+            org.liftrr.domain.workout.MovementPhase.DESCENT,
+            org.liftrr.domain.workout.MovementPhase.BOTTOM,
+            org.liftrr.domain.workout.MovementPhase.ASCENT,
+            org.liftrr.domain.workout.MovementPhase.LOCKOUT
+        )
+
+        // Create pages with side-by-side comparisons (2 phases per page)
+        phaseOrder.chunked(2).forEach { phaseChunk ->
+            val pageInfo = PdfDocument.PageInfo.Builder(595, 842, pageNumber++).create()
+            val page = pdfDocument.startPage(pageInfo)
+            val canvas = page.canvas
+
+            var yPosition = 50f
+            val lineSpacing = 18f
+
+            // Title on first page
+            if (pageNumber == 3) {
+                canvas.drawText("Form Comparison: Best vs Worst Rep", leftMargin, yPosition, headerPaint)
+                yPosition += lineSpacing * 2
+            }
+
+            phaseChunk.forEach { phase ->
+                val phaseName = phase.name.lowercase().replaceFirstChar { it.uppercase() }
+
+                // Get frames for this phase from best and worst reps
+                val goodFrame = keyFrames.find { it.repNumber == bestRepNumber && it.movementPhase == phase }
+                val badFrame = keyFrames.find { it.repNumber == worstRepNumber && it.movementPhase == phase }
+
+                if (goodFrame != null || badFrame != null) {
+                    // Phase header
+                    canvas.drawText("$phaseName Phase", leftMargin, yPosition, headerPaint)
+                    yPosition += lineSpacing * 1.5f
+
+                    val imageWidth = 250f
+                    val imageHeight = 140f
+
+                    // Draw good form on left
+                    goodFrame?.let { frame ->
+                        try {
+                            val bitmap = BitmapFactory.decodeFile(frame.imagePath)
+                            if (bitmap != null) {
+                                val destRect = android.graphics.RectF(
+                                    leftMargin,
+                                    yPosition,
+                                    leftMargin + imageWidth,
+                                    yPosition + imageHeight
+                                )
+                                canvas.drawBitmap(bitmap, null, destRect, null)
+                                bitmap.recycle()
+
+                                // Good form label
+                                canvas.drawText("✓ Good Form", leftMargin, yPosition + imageHeight + 15f, textPaint)
+                            }
+                        } catch (e: Exception) {
+                            android.util.Log.e("WorkoutReportExporter", "Error loading good form image", e)
+                        }
+                    }
+
+                    // Draw bad form on right
+                    badFrame?.let { frame ->
+                        try {
+                            val bitmap = BitmapFactory.decodeFile(frame.imagePath)
+                            if (bitmap != null) {
+                                val rightX = leftMargin + imageWidth + 15f
+                                val destRect = android.graphics.RectF(
+                                    rightX,
+                                    yPosition,
+                                    rightX + imageWidth,
+                                    yPosition + imageHeight
+                                )
+                                canvas.drawBitmap(bitmap, null, destRect, null)
+                                bitmap.recycle()
+
+                                // Bad form label
+                                canvas.drawText("✗ Needs Work", rightX, yPosition + imageHeight + 15f, textPaint)
+                            }
+                        } catch (e: Exception) {
+                            android.util.Log.e("WorkoutReportExporter", "Error loading bad form image", e)
+                        }
+                    }
+
+                    yPosition += imageHeight + 35f
+                }
+            }
+
+            // Footer
+            val footerPaint = Paint().apply {
+                textSize = 10f
+                color = android.graphics.Color.GRAY
+            }
+            canvas.drawText("Page ${pageNumber - 1} - Movement Analysis", leftMargin, 820f, footerPaint)
+
+            pdfDocument.finishPage(page)
+        }
+    }
+
+    /**
+     * Legacy key frames display for backward compatibility
+     */
+    private fun addLegacyKeyFramesPage(
         pdfDocument: PdfDocument,
         keyFrames: List<KeyFrame>,
         headerPaint: Paint,
@@ -347,23 +476,19 @@ object WorkoutReportExporter {
         var yPosition = 50f
         val lineSpacing = 20f
 
-        // Title
         canvas.drawText("Key Frames Analysis", leftMargin, yPosition, headerPaint)
         yPosition += lineSpacing * 2
 
-        // Display each key frame
-        keyFrames.take(3).forEach { keyFrame ->  // Limit to 3 frames per page
+        keyFrames.take(3).forEach { keyFrame ->
             try {
                 val bitmap = BitmapFactory.decodeFile(keyFrame.imagePath)
                 if (bitmap != null) {
-                    // Scale bitmap to fit page width
-                    val maxWidth = 515f  // Page width minus margins
+                    val maxWidth = 515f
                     val maxHeight = 200f
                     val scale = minOf(maxWidth / bitmap.width, maxHeight / bitmap.height)
                     val scaledWidth = bitmap.width * scale
                     val scaledHeight = bitmap.height * scale
 
-                    // Draw bitmap
                     val destRect = android.graphics.RectF(
                         leftMargin,
                         yPosition,
@@ -375,22 +500,19 @@ object WorkoutReportExporter {
 
                     yPosition += scaledHeight + lineSpacing
 
-                    // Draw description
                     val descLines = keyFrame.description.split("\n")
                     descLines.forEach { line ->
                         canvas.drawText(line, leftMargin, yPosition, textPaint)
                         yPosition += lineSpacing
                     }
 
-                    yPosition += lineSpacing  // Extra space between frames
+                    yPosition += lineSpacing
                 }
             } catch (e: Exception) {
-                // Skip frame if image can't be loaded
                 android.util.Log.e("WorkoutReportExporter", "Error loading key frame image", e)
             }
         }
 
-        // Footer
         val footerPaint = Paint().apply {
             textSize = 10f
             color = android.graphics.Color.GRAY
