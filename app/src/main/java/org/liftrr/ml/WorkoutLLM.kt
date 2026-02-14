@@ -8,6 +8,8 @@ import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.receiveAsFlow
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import org.liftrr.domain.analytics.WorkoutReport
 import org.liftrr.domain.workout.RepData
 import javax.inject.Inject
@@ -60,6 +62,9 @@ class WorkoutLLM @Inject constructor(
 
     @Volatile
     private var isInitialized = false
+
+    // Mutex to serialize LLM access (MediaPipe LLM is not thread-safe)
+    private val llmMutex = Mutex()
 
     private val _responses = Channel<LLMResponse>(Channel.CONFLATED)
     val responses: Flow<LLMResponse> = _responses.receiveAsFlow()
@@ -443,9 +448,9 @@ Focus on safety, proper form, and progressive improvement."""
     }
 
     /**
-     * Generate response synchronously
+     * Generate response synchronously with mutex lock to prevent concurrent access
      */
-    private suspend fun generateResponse(prompt: String): String? {
+    private suspend fun generateResponse(prompt: String): String? = llmMutex.withLock {
         val inference = llmInference ?: run {
             Log.e(TAG, "LLM not initialized")
             return null
@@ -494,15 +499,21 @@ Focus on safety, proper form, and progressive improvement."""
 
     /**
      * Stop and release LLM resources
+     * Note: This is a blocking call - use suspend version if calling from coroutine
      */
     fun stop() {
         try {
-            llmInference?.close()
+            // Wait for any ongoing generation to complete before closing
+            // Use runBlocking since this is called from non-suspend contexts
+            kotlinx.coroutines.runBlocking {
+                llmMutex.withLock {
+                    llmInference?.close()
+                    llmInference = null
+                    isInitialized = false
+                }
+            }
         } catch (e: Exception) {
             Log.e(TAG, "Error stopping LLM", e)
-        } finally {
-            llmInference = null
-            isInitialized = false
         }
     }
 
