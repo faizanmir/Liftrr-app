@@ -3,6 +3,7 @@ package org.liftrr.ml
 import android.content.Context
 import android.graphics.Bitmap
 import android.util.Log
+import com.google.mediapipe.framework.MediaPipeException
 import com.google.mediapipe.framework.image.BitmapImageBuilder
 import com.google.mediapipe.tasks.core.BaseOptions
 import com.google.mediapipe.tasks.core.Delegate
@@ -11,259 +12,344 @@ import com.google.mediapipe.tasks.vision.core.RunningMode
 import com.google.mediapipe.tasks.vision.poselandmarker.PoseLandmarker
 import com.google.mediapipe.tasks.vision.poselandmarker.PoseLandmarkerResult
 import dagger.hilt.android.qualifiers.ApplicationContext
-import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.receiveAsFlow
+import java.util.concurrent.locks.ReentrantLock
 import javax.inject.Inject
 import javax.inject.Singleton
+import kotlin.concurrent.withLock
 
+/**
+ * MediaPipe-based pose detector for real-time workout form analysis.
+ *
+ * This implementation uses Google's MediaPipe Pose Landmarker to detect
+ * 33 body landmarks in real-time. It supports both synchronous (IMAGE mode)
+ * and asynchronous (LIVE_STREAM mode) detection.
+ *
+ * Thread-safety: All state mutations are protected by ReentrantLock.
+ * Lifecycle: Call initialize() -> detectPose*() -> stop() -> reset()
+ */
 @Singleton
 class MediaPipePoseDetector @Inject constructor(
-    @param:ApplicationContext private val context: Context
+    @ApplicationContext private val context: Context
 ) : PoseDetector {
 
-    @Volatile
-    private var poseLandmarker: PoseLandmarker? = null
+    // ─── State Management ──────────────────────────────────────────────────
+
+    private sealed class State {
+        object Uninitialized : State()
+        data class Initialized(val landmarker: PoseLandmarker) : State()
+        object Stopped : State()
+    }
 
     @Volatile
-    private var isInitialized = false
+    private var state: State = State.Uninitialized
 
-    @Volatile
-    private var isStopped = false
+    private val lock = ReentrantLock()
+
+    // ─── Result Stream ─────────────────────────────────────────────────────
 
     private val _poseResults = Channel<PoseDetectionResult>(Channel.CONFLATED)
     override val poseResults: Flow<PoseDetectionResult> = _poseResults.receiveAsFlow()
 
-    private val lock = Any()
+    // ─── Bitmap Pool Management ────────────────────────────────────────────
 
-    // Bitmap pool release callback - invoked when MediaPipe is done reading pixels
+    /**
+     * Callback invoked when MediaPipe finishes processing a bitmap.
+     * Used to safely release pooled bitmaps back to the caller.
+     */
     @Volatile
     private var pendingBitmapRelease: (() -> Unit)? = null
 
+    // ─── Configuration ─────────────────────────────────────────────────────
+
     companion object {
+        private const val TAG = "MediaPipePoseDetector"
         private const val MODEL_FILENAME = "pose_landmarker_heavy.task"
+
+        // Confidence thresholds for pose detection quality
         private const val MIN_POSE_DETECTION_CONFIDENCE = 0.5f
         private const val MIN_POSE_TRACKING_CONFIDENCE = 0.5f
         private const val MIN_POSE_PRESENCE_CONFIDENCE = 0.5f
     }
 
+    // ───────────────────────────────────────────────────────────────────────
+    // Public API
+    // ───────────────────────────────────────────────────────────────────────
+
     override fun initialize(runningMode: RunningMode) {
-        synchronized(lock) {
-            // Prevent re-initialization if already initialized and running
-            if (isInitialized && poseLandmarker != null && !isStopped) {
-                Log.d("MediaPipePoseDetector", "Already initialized, skipping")
+        lock.withLock {
+            if (state is State.Initialized) {
+                Log.d(TAG, "Already initialized, skipping")
                 return
             }
 
             try {
-                val baseOptions = BaseOptions.builder()
-                    .setDelegate(Delegate.GPU)
-                    .setModelAssetPath(MODEL_FILENAME)
-                    .build()
-
-                val options = PoseLandmarker.PoseLandmarkerOptions.builder()
-                    .setBaseOptions(baseOptions)
-                    .setRunningMode(runningMode)
-                    .setMinPoseDetectionConfidence(MIN_POSE_DETECTION_CONFIDENCE)
-                    .setMinPosePresenceConfidence(MIN_POSE_PRESENCE_CONFIDENCE)
-                    .setMinTrackingConfidence(MIN_POSE_TRACKING_CONFIDENCE)
-                    .setNumPoses(1) // Track single person for workout analysis
-                    .setOutputSegmentationMasks(false) // We don't need segmentation
-                    .apply {
-                        if (runningMode == RunningMode.LIVE_STREAM) {
-                            setResultListener { result, image ->
-                                // MediaPipe is done reading the bitmap - safe to release
-                                pendingBitmapRelease?.invoke()
-                                pendingBitmapRelease = null
-                                handlePoseResult(result, image.width, image.height)
-                            }
-                            setErrorListener { error ->
-                                pendingBitmapRelease?.invoke()
-                                pendingBitmapRelease = null
-                                handleError(error)
-                            }
-                        }
-                    }
-                    .build()
-
-                poseLandmarker = PoseLandmarker.createFromOptions(context, options)
-                isInitialized = true
-                isStopped = false
-                Log.d("MediaPipePoseDetector", "PoseLandmarker initialized successfully")
-            } catch (e: IllegalStateException) {
-                isInitialized = false
-                throw e
+                val landmarker = createPoseLandmarker(runningMode)
+                state = State.Initialized(landmarker)
+                Log.d(TAG, "PoseLandmarker initialized successfully in $runningMode mode")
             } catch (e: Exception) {
-                isInitialized = false
-                Log.e("MediaPipePoseDetector", "Failed to initialize MediaPipe", e)
-                throw IllegalStateException(
-                    "Failed to initialize PoseLandmarker: ${e.message}\n" +
-                    "Cause: ${e.cause?.message ?: "Unknown"}",
-                    e
-                )
+                state = State.Uninitialized
+                throw IllegalStateException("Failed to initialize PoseLandmarker", e)
             }
         }
     }
 
     override fun stop() {
-        Log.d("MediaPipePoseDetector", "Stopping pose detector")
-        synchronized(lock) {
-            try {
-                isStopped = true
-                pendingBitmapRelease?.invoke()
-                pendingBitmapRelease = null
-                poseLandmarker?.close()
-            } catch (e: Exception) {
-                Log.e("MediaPipePoseDetector", "Error stopping detector", e)
-            } finally {
-                poseLandmarker = null
-                isInitialized = false
+        Log.d(TAG, "Stopping pose detector")
+        lock.withLock {
+            if (state is State.Stopped) return
+
+            when (val currentState = state) {
+                is State.Initialized -> {
+                    try {
+                        releasePendingBitmap()
+                        currentState.landmarker.close()
+                    } catch (e: Exception) {
+                        Log.e(TAG, "Error stopping detector", e)
+                    }
+                }
+                else -> { /* Already stopped or uninitialized */ }
             }
+
+            state = State.Stopped
         }
     }
 
-    @OptIn(ExperimentalCoroutinesApi::class)
     override fun reset() {
-        Log.d("MediaPipePoseDetector", "Resetting pose detector")
-
-        synchronized(lock) {
-            try {
-                isStopped = true
-                pendingBitmapRelease?.invoke()
-                pendingBitmapRelease = null
-                poseLandmarker?.close()
-            } catch (e: Exception) {
-                Log.e("MediaPipePoseDetector", "Error stopping detector during reset", e)
-            } finally {
-                poseLandmarker = null
-                isInitialized = false
-            }
-
-            // Clear any pending results in the channel
-            try {
-                // Cancel and recreate the channel to clear any stale data
-                while (!_poseResults.isEmpty) {
-                    _poseResults.tryReceive()
-                }
-            } catch (e: Exception) {
-                Log.e("MediaPipePoseDetector", "Error clearing channel", e)
-            }
+        Log.d(TAG, "Resetting pose detector")
+        stop()
+        lock.withLock {
+            state = State.Uninitialized
         }
-
-        Log.d("MediaPipePoseDetector", "Pose detector reset complete")
+        // Clear any pending results in the channel
+        _poseResults.tryReceive().getOrNull()
+        Log.d(TAG, "Pose detector reset complete")
     }
 
+    /**
+     * Synchronous pose detection - runs on caller's thread.
+     * Do not call from the main thread.
+     *
+     * @return PoseDetectionResult or null if detector is stopped
+     */
     override fun detectPose(bitmap: Bitmap, timestampMs: Long): PoseDetectionResult? {
-        synchronized(lock) {
-            if (isStopped) {
-                return PoseDetectionResult.Error("Detector is stopped")
-            }
+        val landmarker = getLandmarkerOrInitialize(RunningMode.IMAGE)
+            ?: return PoseDetectionResult.Error("Detector is stopped")
 
-            val landmarker = poseLandmarker ?: run {
-                initialize(RunningMode.IMAGE)
-                poseLandmarker!!
-            }
-
-            return try {
-                val mpImage = BitmapImageBuilder(bitmap).build()
-                val result = landmarker.detect(
-                    mpImage,
-                    ImageProcessingOptions.builder().build()
-                )
-
-                if (result.landmarks().isNotEmpty()) {
-                    PoseDetectionResult.Success(
-                        landmarks = result.landmarks()[0],
-                        worldLandmarks = result.worldLandmarks().getOrNull(0),
-                        timestamp = timestampMs,
-                        imageWidth = bitmap.width,
-                        imageHeight = bitmap.height
-                    )
-                } else {
-                    PoseDetectionResult.NoPoseDetected
-                }
-            } catch (e: Exception) {
-                PoseDetectionResult.Error(e.message ?: "Pose detection failed")
-            }
+        return try {
+            val mpImage = BitmapImageBuilder(bitmap).build()
+            val result = landmarker.detect(mpImage, ImageProcessingOptions.builder().build())
+            createPoseResult(result, bitmap.width, bitmap.height, timestampMs)
+        } catch (e: Exception) {
+            Log.e(TAG, "Synchronous detection failed", e)
+            PoseDetectionResult.Error(e.message ?: "Pose detection failed")
         }
     }
 
+    /**
+     * Asynchronous pose detection - results emitted via poseResults Flow.
+     * Safe to call from any thread.
+     */
     override fun detectPoseAsync(bitmap: Bitmap, timestampMs: Long) {
         detectPoseAsyncInternal(bitmap, timestampMs, onBitmapProcessed = null)
     }
 
-    override fun detectPoseAsync(bitmap: Bitmap, timestampMs: Long, onBitmapProcessed: () -> Unit) {
+    /**
+     * Asynchronous pose detection with bitmap release callback.
+     * Use this when working with bitmap pools to know when it's safe to recycle.
+     */
+    override fun detectPoseAsync(
+        bitmap: Bitmap,
+        timestampMs: Long,
+        onBitmapProcessed: () -> Unit
+    ) {
         detectPoseAsyncInternal(bitmap, timestampMs, onBitmapProcessed)
     }
+
+    // ───────────────────────────────────────────────────────────────────────
+    // Initialization Helpers
+    // ───────────────────────────────────────────────────────────────────────
+
+    private fun createPoseLandmarker(runningMode: RunningMode): PoseLandmarker {
+        val baseOptions = buildBaseOptions()
+        val landmarkerOptions = buildLandmarkerOptions(baseOptions, runningMode)
+
+        return try {
+            PoseLandmarker.createFromOptions(context, landmarkerOptions)
+        } catch (e: MediaPipeException) {
+            throw IllegalStateException(
+                "Failed to create PoseLandmarker. This can happen if:\n" +
+                "  - The model file ($MODEL_FILENAME) is missing or corrupted\n" +
+                "  - The device doesn't support required hardware features\n" +
+                "  - GPU acceleration is unavailable (currently using CPU)",
+                e
+            )
+        }
+    }
+
+    private fun buildBaseOptions(): BaseOptions {
+        return BaseOptions.builder()
+            .setDelegate(Delegate.CPU) // CPU fallback for stability
+            .setModelAssetPath(MODEL_FILENAME)
+            .build()
+    }
+
+    private fun buildLandmarkerOptions(
+        baseOptions: BaseOptions,
+        runningMode: RunningMode
+    ): PoseLandmarker.PoseLandmarkerOptions {
+        return PoseLandmarker.PoseLandmarkerOptions.builder()
+            .setBaseOptions(baseOptions)
+            .setRunningMode(runningMode)
+            .setMinPoseDetectionConfidence(MIN_POSE_DETECTION_CONFIDENCE)
+            .setMinPosePresenceConfidence(MIN_POSE_PRESENCE_CONFIDENCE)
+            .setMinTrackingConfidence(MIN_POSE_TRACKING_CONFIDENCE)
+            .setNumPoses(1) // Single-person workout analysis
+            .setOutputSegmentationMasks(false) // Not needed for form analysis
+            .apply {
+                if (runningMode == RunningMode.LIVE_STREAM) {
+                    configureStreamingMode()
+                }
+            }
+            .build()
+    }
+
+    private fun PoseLandmarker.PoseLandmarkerOptions.Builder.configureStreamingMode() {
+        setResultListener { result, image ->
+            releasePendingBitmap()
+            handlePoseResult(result, image.width, image.height)
+        }
+        setErrorListener { error ->
+            releasePendingBitmap()
+            handleError(error)
+        }
+    }
+
+    // ───────────────────────────────────────────────────────────────────────
+    // State Access Helpers
+    // ───────────────────────────────────────────────────────────────────────
+
+    private fun getLandmarkerOrInitialize(runningMode: RunningMode): PoseLandmarker? {
+        return lock.withLock {
+            when (val currentState = state) {
+                is State.Initialized -> currentState.landmarker
+                State.Uninitialized -> {
+                    initialize(runningMode)
+                    (state as? State.Initialized)?.landmarker
+                }
+                State.Stopped -> null
+            }
+        }
+    }
+
+    private fun getLandmarker(): PoseLandmarker? {
+        return lock.withLock {
+            (state as? State.Initialized)?.landmarker
+        }
+    }
+
+    // ───────────────────────────────────────────────────────────────────────
+    // Async Detection Implementation
+    // ───────────────────────────────────────────────────────────────────────
 
     private fun detectPoseAsyncInternal(
         bitmap: Bitmap,
         timestampMs: Long,
         onBitmapProcessed: (() -> Unit)?
     ) {
-        if (isStopped) {
-            onBitmapProcessed?.invoke()
+        val landmarker = getLandmarker()
+        if (landmarker == null) {
+            handleNotInitializedError(onBitmapProcessed)
             return
         }
 
-        synchronized(lock) {
-            if (isStopped) {
-                onBitmapProcessed?.invoke()
-                return
-            }
+        try {
+            val mpImage = BitmapImageBuilder(bitmap).build()
 
-            val landmarker = poseLandmarker ?: run {
-                Log.e("MediaPipePoseDetector", "Not initialized. Call initialize() first.")
-                _poseResults.trySend(
-                    PoseDetectionResult.Error("PoseDetector not initialized")
-                )
-                onBitmapProcessed?.invoke()
-                return
-            }
-
-            try {
+            lock.withLock {
                 // Release previous bitmap if MediaPipe dropped that frame
-                pendingBitmapRelease?.invoke()
+                releasePendingBitmap()
                 pendingBitmapRelease = onBitmapProcessed
-
-                val mpImage = BitmapImageBuilder(bitmap).build()
-                landmarker.detectAsync(mpImage, timestampMs)
-            } catch (e: Exception) {
-                pendingBitmapRelease?.invoke()
-                pendingBitmapRelease = null
-                Log.e("MediaPipePoseDetector", "Error during pose detection", e)
-                handleError(e)
             }
+
+            landmarker.detectAsync(mpImage, timestampMs)
+        } catch (e: Exception) {
+            lock.withLock {
+                releasePendingBitmap()
+            }
+            Log.e(TAG, "Async detection failed", e)
+            handleError(e)
         }
     }
+
+    // ───────────────────────────────────────────────────────────────────────
+    // Result Handling
+    // ───────────────────────────────────────────────────────────────────────
 
     private fun handlePoseResult(
         result: PoseLandmarkerResult,
         imageWidth: Int,
         imageHeight: Int
     ) {
-        val detectionResult = if (result.landmarks().isNotEmpty()) {
+        val detectionResult = createPoseResult(
+            result,
+            imageWidth,
+            imageHeight,
+            timestampMs = System.currentTimeMillis()
+        )
+        _poseResults.trySend(detectionResult)
+    }
+
+    private fun createPoseResult(
+        result: PoseLandmarkerResult,
+        imageWidth: Int,
+        imageHeight: Int,
+        timestampMs: Long
+    ): PoseDetectionResult {
+        return if (result.landmarks().isNotEmpty()) {
             PoseDetectionResult.Success(
                 landmarks = result.landmarks()[0],
                 worldLandmarks = result.worldLandmarks().getOrNull(0),
-                timestamp = System.currentTimeMillis(),
+                timestamp = timestampMs,
                 imageWidth = imageWidth,
                 imageHeight = imageHeight
             )
         } else {
             PoseDetectionResult.NoPoseDetected
         }
-
-        _poseResults.trySend(detectionResult)
     }
 
     private fun handleError(error: Throwable) {
-        Log.e("MediaPipePoseDetector", "Pose detection error", error)
+        Log.e(TAG, "Pose detection error: ${error.message}", error)
         _poseResults.trySend(
             PoseDetectionResult.Error(
                 error.message ?: "Unknown error: ${error.javaClass.simpleName}"
             )
         )
+    }
+
+    private fun handleNotInitializedError(onBitmapProcessed: (() -> Unit)?) {
+        when (state) {
+            State.Uninitialized -> {
+                Log.e(TAG, "Not initialized. Call initialize() first.")
+                _poseResults.trySend(PoseDetectionResult.Error("PoseDetector not initialized"))
+            }
+            State.Stopped -> {
+                Log.d(TAG, "Detector is stopped, ignoring detection request")
+            }
+            is State.Initialized -> { /* Should not happen */ }
+        }
+        onBitmapProcessed?.invoke()
+    }
+
+    // ───────────────────────────────────────────────────────────────────────
+    // Bitmap Pool Management
+    // ───────────────────────────────────────────────────────────────────────
+
+    private fun releasePendingBitmap() {
+        pendingBitmapRelease?.invoke()
+        pendingBitmapRelease = null
     }
 }

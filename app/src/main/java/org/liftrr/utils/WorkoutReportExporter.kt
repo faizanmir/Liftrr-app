@@ -5,6 +5,7 @@ import android.content.Intent
 import android.graphics.BitmapFactory
 import android.graphics.Paint
 import android.graphics.pdf.PdfDocument
+import androidx.core.app.ShareCompat
 import androidx.core.content.FileProvider
 import androidx.core.graphics.toColorInt
 import com.google.gson.Gson
@@ -503,19 +504,13 @@ object WorkoutReportExporter {
                 context, "${context.packageName}.fileprovider", file
             )
 
-            val shareIntent = Intent(Intent.ACTION_SEND).apply {
-                type = mimeType
-                putExtra(Intent.EXTRA_STREAM, uri)
-                putExtra(Intent.EXTRA_SUBJECT, "My Liftrr Workout Report")
-                putExtra(Intent.EXTRA_TEXT, "Check out my workout results from Liftrr!")
-                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-            }
-
-            val chooserIntent = Intent.createChooser(shareIntent, "Share Workout Report").apply {
-                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-            }
-
-            context.startActivity(chooserIntent)
+            ShareCompat.IntentBuilder(context)
+                .setType(mimeType)
+                .setStream(uri)
+                .setSubject("My Liftrr Workout Report")
+                .setText("Check out my workout results from Liftrr!")
+                .setChooserTitle("Share Workout Report")
+                .startChooser()
         } catch (e: Exception) {
             android.util.Log.e("WorkoutReportExporter", "Failed to share report", e)
             e.printStackTrace()
@@ -527,17 +522,12 @@ object WorkoutReportExporter {
      */
     fun shareAsText(context: Context, text: String) {
         try {
-            val shareIntent = Intent(Intent.ACTION_SEND).apply {
-                type = "text/plain"
-                putExtra(Intent.EXTRA_TEXT, text)
-                putExtra(Intent.EXTRA_SUBJECT, "My Liftrr Workout Report")
-            }
-
-            val chooserIntent = Intent.createChooser(shareIntent, "Share Workout Report").apply {
-                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-            }
-
-            context.startActivity(chooserIntent)
+            ShareCompat.IntentBuilder(context)
+                .setType("text/plain")
+                .setText(text)
+                .setSubject("My Liftrr Workout Report")
+                .setChooserTitle("Share Workout Report")
+                .startChooser()
         } catch (e: Exception) {
             android.util.Log.e("WorkoutReportExporter", "Failed to share text", e)
             e.printStackTrace()

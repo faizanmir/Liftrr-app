@@ -14,14 +14,11 @@ import org.liftrr.data.models.WorkoutSessionEntity
 import org.liftrr.data.repository.WorkoutRepository
 import org.liftrr.ml.ExerciseType
 import java.text.SimpleDateFormat
-import java.util.Calendar
 import java.util.Locale
 import javax.inject.Inject
 
 enum class TimeRange(val label: String) {
-    WEEK("Week"),
-    MONTH("Month"),
-    ALL_TIME("All Time")
+    WEEK("Week"), MONTH("Month"), ALL_TIME("All Time")
 }
 
 sealed class AnalyticsUiState {
@@ -47,21 +44,15 @@ data class OverviewStats(
 )
 
 data class FormQualityPoint(
-    val timestamp: Long,
-    val quality: Float,
-    val label: String
+    val timestamp: Long, val quality: Float, val label: String
 )
 
 data class VolumeTrendPoint(
-    val label: String,
-    val volume: Float,
-    val isHighlighted: Boolean
+    val label: String, val volume: Float, val isHighlighted: Boolean
 )
 
 data class ExerciseDistributionItem(
-    val exerciseType: ExerciseType,
-    val count: Int,
-    val percentage: Float
+    val exerciseType: ExerciseType, val count: Int, val percentage: Float
 )
 
 data class PersonalRecord(
@@ -79,23 +70,20 @@ class AnalyticsViewModel @Inject constructor(
 
     private val _selectedTimeRange = MutableStateFlow(TimeRange.WEEK)
 
-    val uiState: StateFlow<AnalyticsUiState> = _selectedTimeRange
-        .flatMapLatest { range ->
+    val uiState: StateFlow<AnalyticsUiState> = _selectedTimeRange.flatMapLatest { range ->
             when (range) {
                 TimeRange.WEEK -> workoutRepository.getWeekWorkouts()
                 TimeRange.MONTH -> workoutRepository.getMonthWorkouts()
                 TimeRange.ALL_TIME -> workoutRepository.getAllWorkouts()
             }.map { workouts -> buildState(workouts, range) }
-        }
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), AnalyticsUiState.Loading)
+        }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), AnalyticsUiState.Loading)
 
     fun setTimeRange(range: TimeRange) {
         _selectedTimeRange.value = range
     }
 
     private fun buildState(
-        workouts: List<WorkoutSessionEntity>,
-        range: TimeRange
+        workouts: List<WorkoutSessionEntity>, range: TimeRange
     ): AnalyticsUiState.Success {
         return AnalyticsUiState.Success(
             selectedTimeRange = range,
@@ -140,8 +128,7 @@ class AnalyticsViewModel @Inject constructor(
     }
 
     private fun calculateFormQualityTrend(
-        workouts: List<WorkoutSessionEntity>,
-        range: TimeRange
+        workouts: List<WorkoutSessionEntity>, range: TimeRange
     ): List<FormQualityPoint> {
         val sorted = workouts.sortedBy { it.timestamp }
         val dateFormat = when (range) {
@@ -159,8 +146,7 @@ class AnalyticsViewModel @Inject constructor(
     }
 
     private fun calculateVolumeTrend(
-        workouts: List<WorkoutSessionEntity>,
-        range: TimeRange
+        workouts: List<WorkoutSessionEntity>, range: TimeRange
     ): List<VolumeTrendPoint> {
         if (workouts.isEmpty()) return emptyList()
 
@@ -171,8 +157,7 @@ class AnalyticsViewModel @Inject constructor(
         }
 
         val dayFormat = SimpleDateFormat("yyyyDDD", Locale.getDefault())
-        val grouped = workouts.groupBy { dayFormat.format(it.timestamp) }
-            .toSortedMap()
+        val grouped = workouts.groupBy { dayFormat.format(it.timestamp) }.toSortedMap()
 
         val points = grouped.map { (_, dayWorkouts) ->
             val volume = dayWorkouts.sumOf { workout ->
@@ -198,16 +183,13 @@ class AnalyticsViewModel @Inject constructor(
     ): List<ExerciseDistributionItem> {
         if (workouts.isEmpty()) return emptyList()
         val total = workouts.size.toFloat()
-        return workouts
-            .groupBy { it.exerciseType }
-            .map { (type, list) ->
+        return workouts.groupBy { it.exerciseType }.map { (type, list) ->
                 ExerciseDistributionItem(
                     exerciseType = ExerciseType.valueOf(type),
                     count = list.size,
                     percentage = list.size / total
                 )
-            }
-            .sortedByDescending { it.count }
+            }.sortedByDescending { it.count }
     }
 
     private fun calculateGradeDistribution(
@@ -224,19 +206,18 @@ class AnalyticsViewModel @Inject constructor(
     private fun calculatePersonalRecords(
         workouts: List<WorkoutSessionEntity>
     ): List<PersonalRecord> {
-        return workouts
-            .groupBy { it.exerciseType }
-            .mapNotNull { (type, list) ->
+        return workouts.groupBy { it.exerciseType }.mapNotNull { (type, list) ->
                 try {
                     PersonalRecord(
                         exerciseType = ExerciseType.valueOf(type),
-                        heaviestWeight = list.mapNotNull { it.weight }.filter { it > 0 }.maxOrNull(),
+                        heaviestWeight = list.mapNotNull { it.weight }.filter { it > 0 }
+                            .maxOrNull(),
                         mostReps = list.maxOf { it.totalReps },
-                        bestScore = list.maxOf { it.overallScore }
-                    )
-                } catch (_: Exception) { null }
-            }
-            .sortedBy { it.exerciseType.ordinal }
+                        bestScore = list.maxOf { it.overallScore })
+                } catch (_: Exception) {
+                    null
+                }
+            }.sortedBy { it.exerciseType.ordinal }
     }
 
     private fun gradeToScore(grade: String): Int = when (grade.uppercase()) {

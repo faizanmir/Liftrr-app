@@ -14,13 +14,16 @@ class WorkoutEngine {
     private var currentExerciseType: ExerciseType = ExerciseType.SQUAT
     private val reps = mutableListOf<RepData>()
     private var repCount = 0
+    private var workoutStartTime: Long = 0
 
     // Session tracking for analytics
     private var sessionBuilder: WorkoutSessionBuilder? = null
+
     private var isSessionActive = false
 
     companion object {
         private const val MIN_POSE_QUALITY = 0.5f
+        private const val MIN_GOOD_FORM_SCORE = 60f
     }
 
     /**
@@ -38,6 +41,7 @@ class WorkoutEngine {
      * Start a new workout session for analytics
      */
     fun startSession(workoutMode: WorkoutMode) {
+        workoutStartTime = System.currentTimeMillis()
         sessionBuilder = WorkoutSessionBuilder(
             exerciseType = currentExerciseType,
             workoutMode = workoutMode
@@ -64,21 +68,29 @@ class WorkoutEngine {
     fun processPoseResult(result: PoseDetectionResult): WorkoutState {
         return when (result) {
             is PoseDetectionResult.Success -> processSuccessfulPose(result)
-            is PoseDetectionResult.NoPoseDetected -> WorkoutState(
+            is PoseDetectionResult.NoPoseDetected -> createWorkoutState(
                 formFeedback = "Position yourself in frame",
-                poseQualityScore = 0f,
-                repCount = repCount,
-                reps = reps.toList(),
                 currentPose = result
             )
-            is PoseDetectionResult.Error -> WorkoutState(
+            is PoseDetectionResult.Error -> createWorkoutState(
                 formFeedback = "Error: ${result.message}",
-                poseQualityScore = 0f,
-                repCount = repCount,
-                reps = reps.toList(),
                 currentPose = result
             )
         }
+    }
+
+    private fun createWorkoutState(
+        formFeedback: String,
+        currentPose: PoseDetectionResult,
+        poseQualityScore: Float = 0f
+    ): WorkoutState {
+        return WorkoutState(
+            formFeedback = formFeedback,
+            poseQualityScore = poseQualityScore,
+            repCount = repCount,
+            reps = reps.toList(),
+            currentPose = currentPose
+        )
     }
 
     private fun processSuccessfulPose(pose: PoseDetectionResult.Success): WorkoutState {
@@ -96,40 +108,12 @@ class WorkoutEngine {
         val feedback = exercise.analyzeFeedback(pose)
 
         // Record pose frame for analytics (if session is active)
-        if (isSessionActive) {
-            sessionBuilder?.addPoseFrame(pose, if (repCount > 0) repCount else null)
-        }
+        sessionBuilder?.takeIf { isSessionActive }?.addPoseFrame(pose, if (repCount > 0) repCount else null)
 
         // Update rep count
         val repCompleted = exercise.updateRepCount(pose)
         if (repCompleted) {
-            repCount++
-            // Use weighted form score from exercise-specific validation
-            val exerciseFormScore = exercise.formScore()
-            val hasGoodPoseQuality = quality.overallConfidence >= MIN_POSE_QUALITY
-            // Blend pose quality with exercise form score
-            val blendedScore = if (hasGoodPoseQuality) {
-                exerciseFormScore
-            } else {
-                // Reduce score if pose quality is low (landmarks not reliable)
-                exerciseFormScore * (quality.overallConfidence / MIN_POSE_QUALITY).coerceIn(0.5f, 1f)
-            }
-            val isGoodForm = blendedScore >= 60f
-
-            val repData = RepData(
-                repNumber = repCount,
-                timestamp = System.currentTimeMillis(),
-                poseQuality = quality.overallConfidence,
-                isGoodForm = isGoodForm,
-                formScore = blendedScore
-            )
-
-            reps.add(repData)
-
-            // Record rep for analytics (if session is active)
-            if (isSessionActive) {
-                sessionBuilder?.addRep(repData)
-            }
+            handleRepCompletion(quality)
         }
 
         return WorkoutState(
@@ -140,6 +124,40 @@ class WorkoutEngine {
             currentPose = pose,
             poseQuality = quality
         )
+    }
+
+    private fun handleRepCompletion(quality: PoseQuality) {
+        repCount++
+        // Use weighted form score from exercise-specific validation
+        val exerciseFormScore = currentExercise!!.formScore()
+        val hasGoodPoseQuality = quality.overallConfidence >= MIN_POSE_QUALITY
+        // Blend pose quality with exercise form score
+        val blendedScore = if (hasGoodPoseQuality) {
+            exerciseFormScore
+        } else {
+            // Reduce score if pose quality is low (landmarks not reliable)
+            exerciseFormScore * (quality.overallConfidence / MIN_POSE_QUALITY).coerceIn(0.5f, 1f)
+        }
+        val isGoodForm = blendedScore compareTo MIN_GOOD_FORM_SCORE > 0
+        val feedback = if (isGoodForm) {
+            listOf(FormFeedback("Great form!", "", 100))
+        } else {
+            listOf(FormFeedback("Try to keep your back straight.", "BACK_STRAIGHTNESS", 50))
+        }
+
+        val repData = RepData(
+            repNumber = repCount,
+            timestamp = System.currentTimeMillis(),
+            poseQuality = quality.overallConfidence,
+            isGoodForm = isGoodForm,
+            formScore = blendedScore,
+            feedback = feedback
+        )
+
+        reps.add(repData)
+
+        // Record rep for analytics (if session is active)
+        sessionBuilder?.takeIf { isSessionActive }?.addRep(repData)
     }
 
     /**
@@ -156,12 +174,35 @@ class WorkoutEngine {
      */
     fun getRepStats(): RepStats {
         val goodReps = reps.count { it.isGoodForm }
-        val badReps = reps.count { !it.isGoodForm }
         return RepStats(
             total = repCount,
             good = goodReps,
-            bad = badReps
+            bad = repCount - goodReps
         )
+    }
+
+    fun getWorkoutSummary(): WorkoutSummary {
+        val elapsedTime = System.currentTimeMillis() - workoutStartTime
+        return WorkoutSummary(
+            elapsedTime = elapsedTime,
+            repStats = getRepStats(),
+            reps = reps.toList(),
+            averageFormScore = getAverageFormScore()
+        )
+    }
+
+    fun getAverageFormScore(): Float {
+        if (reps.isEmpty()) {
+            return 0f
+        }
+        return reps.map { it.formScore }.average().toFloat()
+    }
+
+    fun getDetailedFeedback(): List<FormFeedback> {
+        if (reps.isEmpty()) {
+            return emptyList()
+        }
+        return reps.last().feedback
     }
 
     /**
@@ -169,24 +210,3 @@ class WorkoutEngine {
      */
     fun getCurrentExercise(): Exercise? = currentExercise
 }
-
-/**
- * Data class representing the current workout state
- */
-data class WorkoutState(
-    val formFeedback: String,
-    val poseQualityScore: Float,
-    val repCount: Int,
-    val reps: List<RepData>,
-    val currentPose: PoseDetectionResult,
-    val poseQuality: PoseQuality? = null
-)
-
-/**
- * Data class for rep statistics
- */
-data class RepStats(
-    val total: Int,
-    val good: Int,
-    val bad: Int
-)

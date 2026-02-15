@@ -5,5 +5,6 @@ data class RepData(
     val timestamp: Long,
     val poseQuality: Float,
     val isGoodForm: Boolean,
-    val formScore: Float = 100f
+    val formScore: Float = 100f,
+    val feedback: List<FormFeedback> = emptyList()
 )
