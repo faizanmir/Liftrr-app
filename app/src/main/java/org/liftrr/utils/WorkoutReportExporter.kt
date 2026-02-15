@@ -50,6 +50,7 @@ object WorkoutReportExporter {
         val page = pdfDocument.startPage(pageInfo)
 
         val canvas = page.canvas
+        val pageWidth = pageInfo.pageWidth.toFloat()
 
         // Liftrr theme colors (from Color.kt)
         val primaryOrange = android.graphics.Color.parseColor("#FF6B35")
@@ -81,11 +82,12 @@ object WorkoutReportExporter {
 
         var yPosition = 50f
         val leftMargin = 40f
-        val lineSpacing = 25f
+        val rightMargin = 40f
+        val lineSpacing = 20f
 
-        // Header bar with gradient effect (simulated with rectangle)
+        // Header bar - full width
         paint.color = primaryOrange
-        canvas.drawRect(0f, 0f, 595f, 80f, paint)
+        canvas.drawRect(0f, 0f, pageWidth, 80f, paint)
 
         // Title in white on orange background
         val whitePaint = Paint().apply {
@@ -98,7 +100,7 @@ object WorkoutReportExporter {
         whitePaint.alpha = 230
         canvas.drawText("Workout Performance Report", leftMargin, 65f, whitePaint)
 
-        yPosition = 100f
+        yPosition = 105f
 
         // Date and Exercise info
         val dateFormat = SimpleDateFormat("MMMM dd, yyyy", Locale.getDefault())
@@ -106,24 +108,25 @@ object WorkoutReportExporter {
         yPosition += lineSpacing * 1.5f
 
         // Overall Score Section with colored background
+        val scoreCardHeight = 90f
         paint.color = android.graphics.Color.parseColor("#FFF5F2")
-        canvas.drawRoundRect(leftMargin, yPosition, 555f, yPosition + 100f, 12f, 12f, paint)
+        canvas.drawRoundRect(leftMargin, yPosition, pageWidth - rightMargin, yPosition + scoreCardHeight, 12f, 12f, paint)
 
-        yPosition += 25f
-        canvas.drawText("Overall Performance", leftMargin + 20, yPosition, headerPaint)
-        yPosition += lineSpacing
+        yPosition += 22f
+        canvas.drawText("Overall Performance", leftMargin + 15, yPosition, headerPaint)
+        yPosition += lineSpacing + 5f
 
         // Score with large, bold display
         val scorePaint = Paint().apply {
-            textSize = 36f
+            textSize = 32f
             isFakeBoldText = true
             color = primaryOrange
         }
-        canvas.drawText("${report.overallScore.toInt()}%", leftMargin + 20, yPosition, scorePaint)
+        canvas.drawText("${report.overallScore.toInt()}%", leftMargin + 15, yPosition, scorePaint)
 
         // Grade badge
         val gradePaint = Paint().apply {
-            textSize = 28f
+            textSize = 24f
             isFakeBoldText = true
             color = when (report.grade) {
                 "A" -> goodGreen
@@ -132,50 +135,58 @@ object WorkoutReportExporter {
                 else -> badRed
             }
         }
-        canvas.drawText(report.grade, leftMargin + 120, yPosition, gradePaint)
+        canvas.drawText(report.grade, leftMargin + 100, yPosition, gradePaint)
 
         yPosition += lineSpacing
-        canvas.drawText("${report.goodReps} good reps • ${report.badReps} need work • ${formatDuration(report.durationMs)}", leftMargin + 20, yPosition, subtextPaint)
-        yPosition += lineSpacing * 2
+        canvas.drawText("${report.totalReps} reps: ${report.goodReps} good • ${report.badReps} needs work", leftMargin + 15, yPosition, subtextPaint)
+
+        yPosition += scoreCardHeight - 42f // Move past the card
+        yPosition += lineSpacing
 
         // Key Metrics Section with cards
         canvas.drawText("Key Metrics", leftMargin, yPosition, headerPaint)
-        yPosition += lineSpacing * 1.5f
+        yPosition += lineSpacing + 5f
 
         // Create metric cards in 2x2 grid
         val cardWidth = 240f
-        val cardHeight = 60f
-        val cardGap = 20f
+        val cardHeight = 65f
+        val cardGap = 15f
         val cardBg = android.graphics.Color.parseColor("#F4F4F8")
+
+        val metricPaint = Paint().apply {
+            textSize = 22f
+            isFakeBoldText = true
+            color = primaryOrange
+        }
+
+        // Helper function to safely format percentages
+        fun safePercent(value: Float): String {
+            return if (value.isNaN() || value.isInfinite()) "N/A" else "${value.toInt()}%"
+        }
 
         // Card 1: ROM
         paint.color = cardBg
         canvas.drawRoundRect(leftMargin, yPosition, leftMargin + cardWidth, yPosition + cardHeight, 8f, 8f, paint)
-        canvas.drawText("Range of Motion", leftMargin + 15, yPosition + 22, subtextPaint)
-        val romPaint = Paint().apply {
-            textSize = 24f
-            isFakeBoldText = true
-            color = primaryOrange
-        }
-        canvas.drawText("${report.rangeOfMotion.consistency.toInt()}%", leftMargin + 15, yPosition + 50, romPaint)
+        canvas.drawText("Range of Motion", leftMargin + 12, yPosition + 20, subtextPaint)
+        canvas.drawText(safePercent(report.rangeOfMotion.consistency), leftMargin + 12, yPosition + 48, metricPaint)
 
         // Card 2: Symmetry
         canvas.drawRoundRect(leftMargin + cardWidth + cardGap, yPosition, leftMargin + 2 * cardWidth + cardGap, yPosition + cardHeight, 8f, 8f, paint)
-        canvas.drawText("Symmetry", leftMargin + cardWidth + cardGap + 15, yPosition + 22, subtextPaint)
-        canvas.drawText("${report.symmetry.overallSymmetry.toInt()}%", leftMargin + cardWidth + cardGap + 15, yPosition + 50, romPaint)
+        canvas.drawText("Symmetry", leftMargin + cardWidth + cardGap + 12, yPosition + 20, subtextPaint)
+        canvas.drawText(safePercent(report.symmetry.overallSymmetry), leftMargin + cardWidth + cardGap + 12, yPosition + 48, metricPaint)
 
         yPosition += cardHeight + cardGap
 
         // Card 3: Form Consistency
         canvas.drawRoundRect(leftMargin, yPosition, leftMargin + cardWidth, yPosition + cardHeight, 8f, 8f, paint)
-        canvas.drawText("Form Consistency", leftMargin + 15, yPosition + 22, subtextPaint)
-        canvas.drawText("${report.formConsistency.consistencyScore.toInt()}%", leftMargin + 15, yPosition + 50, romPaint)
+        canvas.drawText("Form Consistency", leftMargin + 12, yPosition + 20, subtextPaint)
+        canvas.drawText(safePercent(report.formConsistency.consistencyScore), leftMargin + 12, yPosition + 48, metricPaint)
 
         // Card 4: Quality Trend
         canvas.drawRoundRect(leftMargin + cardWidth + cardGap, yPosition, leftMargin + 2 * cardWidth + cardGap, yPosition + cardHeight, 8f, 8f, paint)
-        canvas.drawText("Quality Trend", leftMargin + cardWidth + cardGap + 15, yPosition + 22, subtextPaint)
+        canvas.drawText("Quality Trend", leftMargin + cardWidth + cardGap + 12, yPosition + 20, subtextPaint)
         val trendPaint = Paint().apply {
-            textSize = 16f
+            textSize = 14f
             isFakeBoldText = true
             color = when (report.formConsistency.qualityTrend.lowercase()) {
                 "improving" -> goodGreen
@@ -183,42 +194,42 @@ object WorkoutReportExporter {
                 else -> lightGray
             }
         }
-        canvas.drawText(report.formConsistency.qualityTrend, leftMargin + cardWidth + cardGap + 15, yPosition + 50, trendPaint)
+        canvas.drawText(report.formConsistency.qualityTrend, leftMargin + cardWidth + cardGap + 12, yPosition + 48, trendPaint)
 
-        yPosition += cardHeight + lineSpacing * 2
+        yPosition += cardHeight + lineSpacing * 1.5f
 
         // Exercise-Specific Metrics
         report.exerciseSpecificMetrics?.let { metrics ->
-            canvas.drawText("Exercise-Specific Analysis", leftMargin, yPosition, headerPaint)
-            yPosition += lineSpacing
+            canvas.drawText("Exercise Analysis", leftMargin, yPosition, headerPaint)
+            yPosition += lineSpacing + 5f
 
             when (metrics) {
                 is ExerciseSpecificMetrics.SquatMetrics -> {
-                    canvas.drawText("Average Depth: ${metrics.averageDepth.toInt()}°", leftMargin + 20, yPosition, textPaint)
+                    canvas.drawText("• Average Depth: ${safePercent(metrics.averageDepth)}", leftMargin + 12, yPosition, textPaint)
                     yPosition += lineSpacing
-                    canvas.drawText("Knee Tracking: ${metrics.kneeTracking.kneeAlignment.toInt()}%", leftMargin + 20, yPosition, textPaint)
+                    canvas.drawText("• Knee Alignment: ${safePercent(metrics.kneeTracking.kneeAlignment)}", leftMargin + 12, yPosition, textPaint)
                     yPosition += lineSpacing
-                    canvas.drawText("Hip Mobility: ${metrics.hipMobility.toInt()}%", leftMargin + 20, yPosition, textPaint)
+                    canvas.drawText("• Hip Mobility: ${safePercent(metrics.hipMobility)}", leftMargin + 12, yPosition, textPaint)
                     yPosition += lineSpacing
                 }
                 is ExerciseSpecificMetrics.DeadliftMetrics -> {
-                    canvas.drawText("Hip Hinge Quality: ${metrics.hipHingeQuality.toInt()}%", leftMargin + 20, yPosition, textPaint)
+                    canvas.drawText("• Hip Hinge Quality: ${safePercent(metrics.hipHingeQuality)}", leftMargin + 12, yPosition, textPaint)
                     yPosition += lineSpacing
-                    canvas.drawText("Back Straightness: ${metrics.backStraightness.spineNeutral.toInt()}%", leftMargin + 20, yPosition, textPaint)
+                    canvas.drawText("• Spine Neutral: ${safePercent(metrics.backStraightness.spineNeutral)}", leftMargin + 12, yPosition, textPaint)
                     yPosition += lineSpacing
-                    canvas.drawText("Lockout Completion: ${metrics.lockoutCompletion.toInt()}%", leftMargin + 20, yPosition, textPaint)
+                    canvas.drawText("• Lockout: ${safePercent(metrics.lockoutCompletion)}", leftMargin + 12, yPosition, textPaint)
                     yPosition += lineSpacing
                 }
                 is ExerciseSpecificMetrics.BenchPressMetrics -> {
-                    canvas.drawText("Bottom Elbow Angle: ${metrics.elbowAngle.bottomAngle.toInt()}°", leftMargin + 20, yPosition, textPaint)
+                    canvas.drawText("• Bottom Angle: ${metrics.elbowAngle.bottomAngle.toInt()}°", leftMargin + 12, yPosition, textPaint)
                     yPosition += lineSpacing
-                    canvas.drawText("Elbow Tucking: ${metrics.elbowAngle.tucking.toInt()}%", leftMargin + 20, yPosition, textPaint)
+                    canvas.drawText("• Elbow Tucking: ${safePercent(metrics.elbowAngle.tucking)}", leftMargin + 12, yPosition, textPaint)
                     yPosition += lineSpacing
-                    canvas.drawText("Shoulder Stability: ${metrics.shoulderPosition.stability.toInt()}%", leftMargin + 20, yPosition, textPaint)
+                    canvas.drawText("• Shoulder Stability: ${safePercent(metrics.shoulderPosition.stability)}", leftMargin + 12, yPosition, textPaint)
                     yPosition += lineSpacing
                 }
             }
-            yPosition += lineSpacing
+            yPosition += lineSpacing * 0.5f
         }
 
         // Recommendations Section
