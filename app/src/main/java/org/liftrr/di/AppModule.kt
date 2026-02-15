@@ -10,7 +10,6 @@ import dagger.hilt.components.SingletonComponent
 import kotlinx.coroutines.CoroutineName
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.SupervisorJob
-import org.liftrr.BuildConfig
 import org.liftrr.data.preferences.ThemePreferences
 import org.liftrr.di.annotations.creds.GoogleSignInClientId
 import org.liftrr.utils.DefaultDispatcherProvider
@@ -44,7 +43,9 @@ object AppProvidesModule {
     @Provides
     @Singleton
     @GoogleSignInClientId
-    fun providesGoogleSignInClientId() = BuildConfig.WEB_CLIENT_ID
+    fun providesGoogleSignInClientId(@ApplicationContext context: Context): String {
+        return context.getString(org.liftrr.R.string.web_client_id)
+    }
 
     @Provides
     @Singleton
