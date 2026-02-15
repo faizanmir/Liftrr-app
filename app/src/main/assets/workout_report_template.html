@@ -1,0 +1,382 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Liftrr Workout Report</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700;900&display=swap');
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Roboto', sans-serif;
+            background: linear-gradient(135deg, #FFF 0%, #FFF5F2 100%);
+            color: #1C1B1F;
+            line-height: 1.6;
+            padding: 40px;
+        }
+
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 16px;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+            overflow: hidden;
+        }
+
+        .header {
+            background: linear-gradient(135deg, #FF6B35 0%, #FF9068 100%);
+            color: white;
+            padding: 40px;
+            text-align: center;
+        }
+
+        .header h1 {
+            font-size: 32px;
+            font-weight: 900;
+            margin-bottom: 8px;
+            letter-spacing: -0.5px;
+        }
+
+        .header .subtitle {
+            font-size: 14px;
+            opacity: 0.95;
+            font-weight: 300;
+        }
+
+        .section {
+            padding: 32px 40px;
+            border-bottom: 1px solid #E7E0EC;
+        }
+
+        .section:last-child {
+            border-bottom: none;
+        }
+
+        .section-title {
+            font-size: 22px;
+            font-weight: 700;
+            color: #FF6B35;
+            margin-bottom: 20px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .section-title::before {
+            content: '';
+            width: 4px;
+            height: 24px;
+            background: #FF6B35;
+            border-radius: 2px;
+        }
+
+        .info-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 20px;
+            margin-bottom: 24px;
+        }
+
+        .info-item {
+            background: #FFF9F5;
+            padding: 16px;
+            border-radius: 12px;
+            border-left: 3px solid #FF6B35;
+        }
+
+        .info-label {
+            font-size: 12px;
+            color: #79747E;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-bottom: 4px;
+            font-weight: 500;
+        }
+
+        .info-value {
+            font-size: 20px;
+            font-weight: 700;
+            color: #1C1B1F;
+        }
+
+        .grade-badge {
+            display: inline-block;
+            background: linear-gradient(135deg, #7CB342 0%, #9CCC65 100%);
+            color: white;
+            padding: 8px 20px;
+            border-radius: 20px;
+            font-size: 28px;
+            font-weight: 900;
+            margin-left: 12px;
+        }
+
+        .grade-badge.b { background: linear-gradient(135deg, #1565C0 0%, #42A5F5 100%); }
+        .grade-badge.c { background: linear-gradient(135deg, #FF9800 0%, #FFB74D 100%); }
+        .grade-badge.d { background: linear-gradient(135deg, #FF5252 0%, #FF8A80 100%); }
+        .grade-badge.f { background: linear-gradient(135deg, #B3261E 0%, #E57373 100%); }
+
+        .metrics-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 16px;
+        }
+
+        .metric-card {
+            background: #F4F4F8;
+            padding: 20px;
+            border-radius: 12px;
+        }
+
+        .metric-title {
+            font-size: 13px;
+            color: #49454F;
+            margin-bottom: 8px;
+            font-weight: 500;
+        }
+
+        .metric-value {
+            font-size: 28px;
+            font-weight: 700;
+            color: #FF6B35;
+        }
+
+        .frame-comparison {
+            margin-top: 24px;
+        }
+
+        .phase-group {
+            margin-bottom: 32px;
+            page-break-inside: avoid;
+        }
+
+        .phase-title {
+            font-size: 18px;
+            font-weight: 700;
+            color: #1565C0;
+            margin-bottom: 16px;
+            padding-bottom: 8px;
+            border-bottom: 2px solid #D4E4FF;
+        }
+
+        .frame-row {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+            margin-bottom: 20px;
+        }
+
+        .frame-card {
+            border-radius: 12px;
+            overflow: hidden;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+        }
+
+        .frame-image {
+            width: 100%;
+            height: auto;
+            display: block;
+        }
+
+        .frame-info {
+            padding: 16px;
+        }
+
+        .frame-info.good {
+            background: linear-gradient(135deg, #F1F8E9 0%, #DCEDC8 100%);
+            border-top: 3px solid #7CB342;
+        }
+
+        .frame-info.bad {
+            background: linear-gradient(135deg, #FFEBEE 0%, #FFCDD2 100%);
+            border-top: 3px solid #FF5252;
+        }
+
+        .frame-status {
+            font-size: 14px;
+            font-weight: 700;
+            margin-bottom: 8px;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .frame-status.good {
+            color: #2E7D32;
+        }
+
+        .frame-status.bad {
+            color: #C62828;
+        }
+
+        .frame-score {
+            font-size: 12px;
+            color: #49454F;
+            margin-bottom: 12px;
+            font-weight: 500;
+        }
+
+        .diagnostic-item {
+            background: rgba(255, 255, 255, 0.7);
+            padding: 10px 12px;
+            border-radius: 8px;
+            margin-bottom: 8px;
+            font-size: 11px;
+            line-height: 1.5;
+        }
+
+        .diagnostic-issue {
+            font-weight: 700;
+            margin-bottom: 4px;
+            color: #1C1B1F;
+        }
+
+        .diagnostic-angle {
+            color: #49454F;
+            font-weight: 500;
+        }
+
+        .diagnostic-expected {
+            color: #79747E;
+            font-size: 10px;
+        }
+
+        .recommendations {
+            background: #E8F5E9;
+            padding: 20px;
+            border-radius: 12px;
+            border-left: 4px solid #7CB342;
+        }
+
+        .recommendations li {
+            margin-left: 20px;
+            margin-bottom: 12px;
+            color: #1C1B1F;
+            font-size: 14px;
+        }
+
+        .footer {
+            background: #1C1B1F;
+            color: white;
+            padding: 24px 40px;
+            text-align: center;
+            font-size: 12px;
+        }
+
+        .footer-logo {
+            font-size: 20px;
+            font-weight: 900;
+            color: #FF6B35;
+            margin-bottom: 8px;
+        }
+
+        @media print {
+            body {
+                padding: 0;
+                background: white;
+            }
+
+            .container {
+                box-shadow: none;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- Header -->
+        <div class="header">
+            <h1>{{APP_NAME}}</h1>
+            <div class="subtitle">Workout Performance Report</div>
+        </div>
+
+        <!-- Overview Section -->
+        <div class="section">
+            <div class="section-title">Workout Summary</div>
+            <div class="info-grid">
+                <div class="info-item">
+                    <div class="info-label">Exercise</div>
+                    <div class="info-value">{{EXERCISE_TYPE}}</div>
+                </div>
+                <div class="info-item">
+                    <div class="info-label">Date</div>
+                    <div class="info-value">{{DATE}}</div>
+                </div>
+                <div class="info-item">
+                    <div class="info-label">Total Reps</div>
+                    <div class="info-value">{{TOTAL_REPS}}</div>
+                </div>
+                <div class="info-item">
+                    <div class="info-label">Duration</div>
+                    <div class="info-value">{{DURATION}}</div>
+                </div>
+            </div>
+
+            <div style="text-align: center; margin-top: 24px;">
+                <span style="font-size: 16px; color: #49454F;">Overall Score:</span>
+                <span style="font-size: 32px; font-weight: 900; color: #FF6B35; margin: 0 12px;">{{OVERALL_SCORE}}%</span>
+                <span class="grade-badge {{GRADE_CLASS}}">{{GRADE}}</span>
+            </div>
+
+            <div class="info-grid" style="margin-top: 24px; margin-bottom: 0;">
+                <div class="info-item" style="border-left-color: #7CB342;">
+                    <div class="info-label">Good Reps</div>
+                    <div class="info-value" style="color: #7CB342;">{{GOOD_REPS}}</div>
+                </div>
+                <div class="info-item" style="border-left-color: #FF5252;">
+                    <div class="info-label">Needs Work</div>
+                    <div class="info-value" style="color: #FF5252;">{{BAD_REPS}}</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Key Metrics Section -->
+        <div class="section">
+            <div class="section-title">Key Metrics</div>
+            <div class="metrics-grid">
+                <div class="metric-card">
+                    <div class="metric-title">Range of Motion</div>
+                    <div class="metric-value">{{ROM_CONSISTENCY}}%</div>
+                </div>
+                <div class="metric-card">
+                    <div class="metric-title">Symmetry</div>
+                    <div class="metric-value">{{SYMMETRY}}%</div>
+                </div>
+                <div class="metric-card">
+                    <div class="metric-title">Form Consistency</div>
+                    <div class="metric-value">{{FORM_CONSISTENCY}}%</div>
+                </div>
+                <div class="metric-card">
+                    <div class="metric-title">Quality Trend</div>
+                    <div class="metric-value" style="font-size: 16px;">{{QUALITY_TREND}}</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Exercise Specific Metrics -->
+        {{EXERCISE_METRICS}}
+
+        <!-- Form Analysis -->
+        <div class="section">
+            <div class="section-title">Form Analysis</div>
+            {{FRAME_COMPARISONS}}
+        </div>
+
+        <!-- Recommendations -->
+        {{RECOMMENDATIONS}}
+
+        <!-- Footer -->
+        <div class="footer">
+            <div class="footer-logo">LIFTRR</div>
+            <div>Your AI-Powered Fitness Coach</div>
+            <div style="margin-top: 8px; opacity: 0.7;">Generated on {{GENERATION_DATE}}</div>
+        </div>
+    </div>
+</body>
+</html>

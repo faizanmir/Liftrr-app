@@ -42,7 +42,7 @@ object WorkoutReportExporter {
     }
 
     /**
-     * Internal PDF export with key frames
+     * Internal PDF export with key frames - Enhanced with Liftrr theme
      */
     private fun exportAsPdfWithFrames(context: Context, report: WorkoutReport, keyFrames: List<KeyFrame>): File {
         val pdfDocument = PdfDocument()
@@ -50,57 +50,142 @@ object WorkoutReportExporter {
         val page = pdfDocument.startPage(pageInfo)
 
         val canvas = page.canvas
+
+        // Liftrr theme colors (from Color.kt)
+        val primaryOrange = android.graphics.Color.parseColor("#FF6B35")
+        val deepBlue = android.graphics.Color.parseColor("#1565C0")
+        val goodGreen = android.graphics.Color.parseColor("#7CB342")
+        val badRed = android.graphics.Color.parseColor("#FF5252")
+        val darkText = android.graphics.Color.parseColor("#1C1B1F")
+        val lightGray = android.graphics.Color.parseColor("#79747E")
+
         val paint = Paint()
         val titlePaint = Paint().apply {
-            textSize = 24f
+            textSize = 28f
             isFakeBoldText = true
+            color = primaryOrange
         }
         val headerPaint = Paint().apply {
             textSize = 18f
             isFakeBoldText = true
+            color = primaryOrange
         }
         val textPaint = Paint().apply {
             textSize = 14f
+            color = darkText
+        }
+        val subtextPaint = Paint().apply {
+            textSize = 12f
+            color = lightGray
         }
 
         var yPosition = 50f
         val leftMargin = 40f
         val lineSpacing = 25f
 
-        // Title
-        canvas.drawText("Liftrr Workout Report", leftMargin, yPosition, titlePaint)
+        // Header bar with gradient effect (simulated with rectangle)
+        paint.color = primaryOrange
+        canvas.drawRect(0f, 0f, 595f, 80f, paint)
+
+        // Title in white on orange background
+        val whitePaint = Paint().apply {
+            textSize = 28f
+            isFakeBoldText = true
+            color = android.graphics.Color.WHITE
+        }
+        canvas.drawText("LIFTRR", leftMargin, 45f, whitePaint)
+        whitePaint.textSize = 14f
+        whitePaint.alpha = 230
+        canvas.drawText("Workout Performance Report", leftMargin, 65f, whitePaint)
+
+        yPosition = 100f
+
+        // Date and Exercise info
+        val dateFormat = SimpleDateFormat("MMMM dd, yyyy", Locale.getDefault())
+        canvas.drawText("${report.exerciseType.name.replace("_", " ")} • ${dateFormat.format(Date())}", leftMargin, yPosition, textPaint)
+        yPosition += lineSpacing * 1.5f
+
+        // Overall Score Section with colored background
+        paint.color = android.graphics.Color.parseColor("#FFF5F2")
+        canvas.drawRoundRect(leftMargin, yPosition, 555f, yPosition + 100f, 12f, 12f, paint)
+
+        yPosition += 25f
+        canvas.drawText("Overall Performance", leftMargin + 20, yPosition, headerPaint)
+        yPosition += lineSpacing
+
+        // Score with large, bold display
+        val scorePaint = Paint().apply {
+            textSize = 36f
+            isFakeBoldText = true
+            color = primaryOrange
+        }
+        canvas.drawText("${report.overallScore.toInt()}%", leftMargin + 20, yPosition, scorePaint)
+
+        // Grade badge
+        val gradePaint = Paint().apply {
+            textSize = 28f
+            isFakeBoldText = true
+            color = when (report.grade) {
+                "A" -> goodGreen
+                "B" -> deepBlue
+                "C" -> android.graphics.Color.parseColor("#FF9800")
+                else -> badRed
+            }
+        }
+        canvas.drawText(report.grade, leftMargin + 120, yPosition, gradePaint)
+
+        yPosition += lineSpacing
+        canvas.drawText("${report.goodReps} good reps • ${report.badReps} need work • ${formatDuration(report.durationMs)}", leftMargin + 20, yPosition, subtextPaint)
         yPosition += lineSpacing * 2
 
-        // Date
-        val dateFormat = SimpleDateFormat("MMMM dd, yyyy 'at' hh:mm a", Locale.getDefault())
-        canvas.drawText("Date: ${dateFormat.format(Date(report.durationMs))}", leftMargin, yPosition, textPaint)
-        yPosition += lineSpacing
-
-        // Exercise Type
-        canvas.drawText("Exercise: ${report.exerciseType.name.replace("_", " ")}", leftMargin, yPosition, textPaint)
-        yPosition += lineSpacing * 2
-
-        // Overall Score Section
-        canvas.drawText("Overall Performance", leftMargin, yPosition, headerPaint)
-        yPosition += lineSpacing
-        canvas.drawText("Score: ${report.overallScore.toInt()}% (Grade: ${report.grade})", leftMargin + 20, yPosition, textPaint)
-        yPosition += lineSpacing
-        canvas.drawText("Total Reps: ${report.totalReps} (${report.goodReps} good, ${report.badReps} bad)", leftMargin + 20, yPosition, textPaint)
-        yPosition += lineSpacing
-        canvas.drawText("Duration: ${formatDuration(report.durationMs)}", leftMargin + 20, yPosition, textPaint)
-        yPosition += lineSpacing * 2
-
-        // Key Metrics Section
+        // Key Metrics Section with cards
         canvas.drawText("Key Metrics", leftMargin, yPosition, headerPaint)
-        yPosition += lineSpacing
-        canvas.drawText("Range of Motion Consistency: ${report.rangeOfMotion.consistency.toInt()}%", leftMargin + 20, yPosition, textPaint)
-        yPosition += lineSpacing
-        canvas.drawText("Symmetry: ${report.symmetry.overallSymmetry.toInt()}%", leftMargin + 20, yPosition, textPaint)
-        yPosition += lineSpacing
-        canvas.drawText("Form Consistency: ${report.formConsistency.consistencyScore.toInt()}%", leftMargin + 20, yPosition, textPaint)
-        yPosition += lineSpacing
-        canvas.drawText("Quality Trend: ${report.formConsistency.qualityTrend}", leftMargin + 20, yPosition, textPaint)
-        yPosition += lineSpacing * 2
+        yPosition += lineSpacing * 1.5f
+
+        // Create metric cards in 2x2 grid
+        val cardWidth = 240f
+        val cardHeight = 60f
+        val cardGap = 20f
+        val cardBg = android.graphics.Color.parseColor("#F4F4F8")
+
+        // Card 1: ROM
+        paint.color = cardBg
+        canvas.drawRoundRect(leftMargin, yPosition, leftMargin + cardWidth, yPosition + cardHeight, 8f, 8f, paint)
+        canvas.drawText("Range of Motion", leftMargin + 15, yPosition + 22, subtextPaint)
+        val romPaint = Paint().apply {
+            textSize = 24f
+            isFakeBoldText = true
+            color = primaryOrange
+        }
+        canvas.drawText("${report.rangeOfMotion.consistency.toInt()}%", leftMargin + 15, yPosition + 50, romPaint)
+
+        // Card 2: Symmetry
+        canvas.drawRoundRect(leftMargin + cardWidth + cardGap, yPosition, leftMargin + 2 * cardWidth + cardGap, yPosition + cardHeight, 8f, 8f, paint)
+        canvas.drawText("Symmetry", leftMargin + cardWidth + cardGap + 15, yPosition + 22, subtextPaint)
+        canvas.drawText("${report.symmetry.overallSymmetry.toInt()}%", leftMargin + cardWidth + cardGap + 15, yPosition + 50, romPaint)
+
+        yPosition += cardHeight + cardGap
+
+        // Card 3: Form Consistency
+        canvas.drawRoundRect(leftMargin, yPosition, leftMargin + cardWidth, yPosition + cardHeight, 8f, 8f, paint)
+        canvas.drawText("Form Consistency", leftMargin + 15, yPosition + 22, subtextPaint)
+        canvas.drawText("${report.formConsistency.consistencyScore.toInt()}%", leftMargin + 15, yPosition + 50, romPaint)
+
+        // Card 4: Quality Trend
+        canvas.drawRoundRect(leftMargin + cardWidth + cardGap, yPosition, leftMargin + 2 * cardWidth + cardGap, yPosition + cardHeight, 8f, 8f, paint)
+        canvas.drawText("Quality Trend", leftMargin + cardWidth + cardGap + 15, yPosition + 22, subtextPaint)
+        val trendPaint = Paint().apply {
+            textSize = 16f
+            isFakeBoldText = true
+            color = when (report.formConsistency.qualityTrend.lowercase()) {
+                "improving" -> goodGreen
+                "declining" -> badRed
+                else -> lightGray
+            }
+        }
+        canvas.drawText(report.formConsistency.qualityTrend, leftMargin + cardWidth + cardGap + 15, yPosition + 50, trendPaint)
+
+        yPosition += cardHeight + lineSpacing * 2
 
         // Exercise-Specific Metrics
         report.exerciseSpecificMetrics?.let { metrics ->
