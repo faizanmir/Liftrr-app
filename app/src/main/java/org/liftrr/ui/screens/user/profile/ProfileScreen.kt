@@ -27,7 +27,9 @@ import androidx.compose.material.icons.automirrored.filled.ArrowRight
 import androidx.compose.material.icons.automirrored.filled.Login
 import androidx.compose.material.icons.automirrored.filled.Logout
 import androidx.compose.material.icons.filled.Badge
+import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.DarkMode
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Email
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.outlined.CloudUpload
@@ -43,14 +45,19 @@ import androidx.compose.material.icons.outlined.Palette
 import androidx.compose.material.icons.outlined.Person
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
@@ -72,30 +79,44 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import androidx.hilt.navigation.compose.hiltViewModel
 import coil3.compose.AsyncImage
 import coil3.request.ImageRequest
 import coil3.request.crossfade
-import androidx.hilt.navigation.compose.hiltViewModel
 import org.liftrr.data.models.AuthProvider
 import org.liftrr.data.models.UserDto
+import org.liftrr.ui.screens.profile.ProgressiveProfilePromptContainer
+import org.liftrr.ui.screens.profile.ProgressiveProfileViewModel
 import org.liftrr.ui.theme.LiftrrTheme
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ProfileScreen(
     viewModel: ProfileViewModel = hiltViewModel(),
+    progressiveProfileViewModel: ProgressiveProfileViewModel = hiltViewModel(),
     onNavigateBack: () -> Unit = {},
-    onLoginClick: () -> Unit = {}
+    onLoginClick: () -> Unit = {},
+    onNavigateToOnboarding: (Boolean) -> Unit = {}
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val logoutState by viewModel.logoutState.collectAsState()
+    val progressiveProfileState by progressiveProfileViewModel.state.collectAsState()
 
     var showLogoutDialog by remember { mutableStateOf(false) }
+    val snackbarHostState = remember { SnackbarHostState() }
+
+    // Show snackbar for error messages
+    LaunchedEffect(progressiveProfileState.errorMessage) {
+        progressiveProfileState.errorMessage?.let { message ->
+            snackbarHostState.showSnackbar(message)
+            progressiveProfileViewModel.clearError()
+        }
+    }
 
     // Refresh profile when returning from auth screen
     LaunchedEffect(Unit) {
@@ -117,6 +138,9 @@ fun ProfileScreen(
 
     Scaffold(
         containerColor = MaterialTheme.colorScheme.surface,
+        snackbarHost = {
+            SnackbarHost(hostState = snackbarHostState)
+        },
         topBar = {
             TopAppBar(
                 title = { Text("Profile") },
@@ -151,8 +175,11 @@ fun ProfileScreen(
                     user = state.user,
                     isDarkMode = state.isDarkMode,
                     isDynamicColorEnabled = state.isDynamicColorEnabled,
+                    profileCompleteness = progressiveProfileState.profileCompleteness,
                     onDarkModeToggle = viewModel::toggleDarkMode,
                     onDynamicColorToggle = viewModel::toggleDynamicColor,
+                    onCompleteProfileClick = { onNavigateToOnboarding(false) },
+                    onEditProfileClick = { onNavigateToOnboarding(true) },
                     onLogoutClick = { showLogoutDialog = true },
                     modifier = Modifier.padding(padding)
                 )
@@ -196,6 +223,12 @@ fun ProfileScreen(
             }
         }
     }
+
+    // Progressive profile prompt container
+    ProgressiveProfilePromptContainer(
+        viewModel = progressiveProfileViewModel,
+        onStartOnboardingFlow = { onNavigateToOnboarding(false) }
+    )
 }
 
 @Composable
@@ -203,8 +236,11 @@ private fun ProfileContent(
     user: UserDto,
     isDarkMode: Boolean,
     isDynamicColorEnabled: Boolean,
+    profileCompleteness: org.liftrr.data.models.ProfileCompleteness,
     onDarkModeToggle: (Boolean) -> Unit,
     onDynamicColorToggle: (Boolean) -> Unit,
+    onCompleteProfileClick: () -> Unit,
+    onEditProfileClick: () -> Unit,
     onLogoutClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -226,6 +262,18 @@ private fun ProfileContent(
         ProfileHeader(user = user)
 
         Spacer(modifier = Modifier.height(24.dp))
+
+        // Profile Completeness Card - only show if profile is incomplete
+        if (!profileCompleteness.isComplete) {
+            ProfileCompletenessCard(
+                profileCompleteness = profileCompleteness,
+                onCompleteClick = onCompleteProfileClick,
+                onEditClick = onEditProfileClick,
+                modifier = Modifier.padding(horizontal = 16.dp)
+            )
+
+            Spacer(modifier = Modifier.height(16.dp))
+        }
 
         // Appearance Section
         SettingsSection(title = "Appearance") {
@@ -261,7 +309,7 @@ private fun ProfileContent(
                 icon = Icons.Outlined.Person,
                 title = "Edit Profile",
                 description = "Update your personal information",
-                onClick = { /* TODO: Navigate to edit profile */ }
+                onClick = onEditProfileClick
             )
 
             HorizontalDivider(
@@ -885,6 +933,169 @@ private fun LogoutConfirmationDialog(
     )
 }
 
+@Composable
+private fun ProfileCompletenessCard(
+    profileCompleteness: org.liftrr.data.models.ProfileCompleteness,
+    onCompleteClick: () -> Unit,
+    onEditClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val completeness = profileCompleteness.completeness
+    val isComplete = profileCompleteness.isComplete
+
+    Card(
+        modifier = modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(
+            containerColor = if (isComplete) {
+                MaterialTheme.colorScheme.tertiaryContainer
+            } else {
+                MaterialTheme.colorScheme.primaryContainer
+            }
+        ),
+        shape = MaterialTheme.shapes.medium
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(20.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp)
+        ) {
+            // Header
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        imageVector = if (isComplete) Icons.Filled.CheckCircle else Icons.Filled.Person,
+                        contentDescription = null,
+                        tint = if (isComplete) {
+                            MaterialTheme.colorScheme.onTertiaryContainer
+                        } else {
+                            MaterialTheme.colorScheme.onPrimaryContainer
+                        },
+                        modifier = Modifier.size(28.dp)
+                    )
+                    Column {
+                        Text(
+                            text = if (isComplete) "Profile Complete!" else "Complete Your Profile",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = if (isComplete) {
+                                MaterialTheme.colorScheme.onTertiaryContainer
+                            } else {
+                                MaterialTheme.colorScheme.onPrimaryContainer
+                            }
+                        )
+                        Text(
+                            text = profileCompleteness.percentageString,
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = if (isComplete) {
+                                MaterialTheme.colorScheme.onTertiaryContainer.copy(alpha = 0.7f)
+                            } else {
+                                MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f)
+                            }
+                        )
+                    }
+                }
+            }
+
+            // Progress Bar
+            LinearProgressIndicator(
+                progress = { completeness },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(8.dp)
+                    .clip(MaterialTheme.shapes.small),
+                color = if (isComplete) {
+                    MaterialTheme.colorScheme.tertiary
+                } else {
+                    MaterialTheme.colorScheme.primary
+                },
+                trackColor = if (isComplete) {
+                    MaterialTheme.colorScheme.tertiary.copy(alpha = 0.2f)
+                } else {
+                    MaterialTheme.colorScheme.primary.copy(alpha = 0.2f)
+                }
+            )
+
+            // Missing Fields Summary
+            if (!isComplete) {
+                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Text(
+                        text = "Complete your profile to unlock personalized insights:",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.8f)
+                    )
+
+                    val missingFields = mutableListOf<String>()
+                    if (!profileCompleteness.hasFitnessLevel) missingFields.add("Fitness Level")
+                    if (!profileCompleteness.hasGoals) missingFields.add("Goals")
+                    if (!profileCompleteness.hasBodyStats) missingFields.add("Body Stats")
+                    if (!profileCompleteness.hasProfilePhoto) missingFields.add("Profile Photo")
+
+                    if (missingFields.isNotEmpty()) {
+                        val missingText = missingFields.take(3).joinToString(", ")
+                        val moreCount = (missingFields.size - 3).coerceAtLeast(0)
+                        Text(
+                            text = "• $missingText${if (moreCount > 0) " +$moreCount more" else ""}",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f)
+                        )
+                    }
+                }
+
+                // Complete Profile Button
+                androidx.compose.material3.Button(
+                    onClick = onCompleteClick,
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = MaterialTheme.colorScheme.primary,
+                        contentColor = MaterialTheme.colorScheme.onPrimary
+                    )
+                ) {
+                    Icon(
+                        imageVector = Icons.Filled.Edit,
+                        contentDescription = null,
+                        modifier = Modifier.size(18.dp)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = "Complete Profile",
+                        style = MaterialTheme.typography.labelLarge,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                }
+            } else {
+                // Edit Profile button for completed profiles
+                OutlinedButton(
+                    onClick = onEditClick,
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = ButtonDefaults.outlinedButtonColors(
+                        contentColor = MaterialTheme.colorScheme.tertiary
+                    )
+                ) {
+                    Icon(
+                        imageVector = Icons.Filled.Edit,
+                        contentDescription = null,
+                        modifier = Modifier.size(18.dp)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = "Edit Profile",
+                        style = MaterialTheme.typography.labelLarge,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                }
+            }
+        }
+    }
+}
+
 // Helper functions
 private fun getFullName(firstName: String?, lastName: String?): String {
     return when {
@@ -930,8 +1141,15 @@ private fun ProfileScreenPreview() {
             ),
             isDarkMode = false,
             isDynamicColorEnabled = true,
+            profileCompleteness = org.liftrr.data.models.ProfileCompleteness(
+                hasFitnessLevel = true,
+                hasGoals = false,
+                hasBodyStats = false
+            ),
             onDarkModeToggle = {},
             onDynamicColorToggle = {},
+            onCompleteProfileClick = {},
+            onEditProfileClick = {},
             onLogoutClick = {}
         )
     }

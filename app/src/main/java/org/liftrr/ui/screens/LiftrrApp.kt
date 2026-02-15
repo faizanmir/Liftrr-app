@@ -47,7 +47,9 @@ import org.liftrr.ui.screens.session.SessionSetupScreen
 import org.liftrr.ui.screens.session.WorkoutMode
 import org.liftrr.ui.screens.user.profile.AuthenticationScreen
 import org.liftrr.ui.screens.user.profile.ProfileScreen
+import org.liftrr.ui.screens.profile.*
 import org.liftrr.ui.screens.welcome.WelcomeScreen
+import org.liftrr.data.models.PromptType
 import org.liftrr.ui.screens.workout.ExerciseSelectionScreen
 import org.liftrr.ui.screens.workout.WorkoutPreparationScreen
 import org.liftrr.ui.screens.workout.WorkoutScreen
@@ -68,6 +70,9 @@ sealed class Screen : NavKey {
     @Serializable data object History : Screen()
     @Serializable data object Analytics : Screen()
     @Serializable data object Settings : Screen()
+
+    // Profile Settings
+    @Serializable data class ProfileOnboarding(val isEditMode: Boolean = false) : Screen()
 
     // Workout flow
     @Serializable data object SessionSetup : Screen()
@@ -217,6 +222,7 @@ fun LiftrrApp(appViewModel: AppViewModel = hiltViewModel()) {
                     entryProvider = entryProvider {
                         onboardingEntries(goBack = goBack, navigate = ::navigate, backStack = backStack)
                         mainEntries(goBack = goBack, navigate = ::navigate)
+                        profileSettingsEntries(goBack = goBack, navigate = ::navigate)
                         workoutEntries(
                             goBack = goBack,
                             navigate = ::navigate,
@@ -293,8 +299,26 @@ private fun EntryProviderScope<NavKey>.mainEntries(
 
     entry<Screen.Settings> {
         ProfileScreen(
-            onNavigateBack = goBack,  // Toolbar back button works
-            onLoginClick = { navigate(Screen.CreateProfile(returnToProfile = true)) }
+            onNavigateBack = goBack,
+            onLoginClick = { navigate(Screen.CreateProfile(returnToProfile = true)) },
+            onNavigateToOnboarding = { isEditMode ->
+                navigate(Screen.ProfileOnboarding(isEditMode))
+            }
+        )
+    }
+}
+
+// ─── Profile Settings Entries ────────────────────────────────────────────────
+
+private fun EntryProviderScope<NavKey>.profileSettingsEntries(
+    goBack: () -> Unit,
+    navigate: (Screen) -> Unit
+) {
+    entry<Screen.ProfileOnboarding> { (isEditMode) ->
+        ProfileOnboardingFlow(
+            isEditMode = isEditMode,
+            onComplete = goBack,
+            onDismiss = goBack
         )
     }
 }
@@ -350,6 +374,9 @@ private fun EntryProviderScope<NavKey>.workoutEntries(
                     reportHolder.clearReport()
                     backStack.clear()
                     backStack.add(Screen.Home)
+                },
+                onNavigateToOnboarding = {
+                    navigate(Screen.ProfileOnboarding(isEditMode = false))
                 }
             )
         } else {

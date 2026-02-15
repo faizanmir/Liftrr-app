@@ -62,6 +62,9 @@ import org.liftrr.domain.analytics.SymmetryAnalysis
 import org.liftrr.domain.analytics.TempoAnalysis
 import org.liftrr.domain.analytics.WorkoutReport
 import org.liftrr.ml.ExerciseType
+import org.liftrr.ui.screens.profile.CheckForPromptAfterWorkout
+import org.liftrr.ui.screens.profile.ProgressiveProfilePromptContainer
+import org.liftrr.data.models.PromptType
 import kotlin.math.roundToInt
 
 /**
@@ -72,6 +75,7 @@ import kotlin.math.roundToInt
 fun WorkoutSummaryScreen(
     report: WorkoutReport,
     onNavigateBack: () -> Unit = {},
+    onNavigateToOnboarding: () -> Unit = {},
     modifier: Modifier = Modifier,
     viewModel: WorkoutSummaryViewModel = hiltViewModel()
 ) {
@@ -91,6 +95,9 @@ fun WorkoutSummaryScreen(
         }
     }
     var showShareMenu by remember { mutableStateOf(false) }
+
+    // Check for progressive profile prompts after workout
+    CheckForPromptAfterWorkout()
 
     Box(modifier = Modifier.fillMaxSize()) {
         Scaffold(
@@ -292,6 +299,11 @@ fun WorkoutSummaryScreen(
             }
         }
     }
+
+    // Progressive profile prompt container
+    ProgressiveProfilePromptContainer(
+        onStartOnboardingFlow = onNavigateToOnboarding
+    )
 }
 
 @Composable
