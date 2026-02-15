@@ -1,6 +1,7 @@
 package org.liftrr.ui.screens.playback
 
 import android.content.Context
+import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.google.gson.Gson
@@ -14,6 +15,11 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.liftrr.data.models.RepDataDto
 import org.liftrr.data.repository.WorkoutRepository
+import org.liftrr.domain.analytics.FormConsistencyAnalysis
+import org.liftrr.domain.analytics.SymmetryAnalysis
+import org.liftrr.domain.analytics.TempoAnalysis
+import org.liftrr.domain.analytics.WorkoutReport
+import org.liftrr.ml.ExerciseType
 import org.liftrr.utils.DispatcherProvider
 import org.liftrr.utils.WorkoutReportExporter
 import javax.inject.Inject
@@ -43,7 +49,7 @@ class WorkoutPlaybackViewModel @Inject constructor(
                             val type = object : TypeToken<List<RepDataDto>>() {}.type
                             Gson().fromJson<List<RepDataDto>>(json, type)
                         } catch (e: Exception) {
-                            android.util.Log.e("WorkoutPlaybackViewModel", "Failed to deserialize rep data", e)
+                            Log.e("WorkoutPlaybackViewModel", "Failed to deserialize rep data", e)
                             null
                         }
                     }
@@ -90,7 +96,7 @@ class WorkoutPlaybackViewModel @Inject constructor(
         viewModelScope.launch(dispatchers.io) {
             try {
                 _isExporting.value = true
-                android.util.Log.d("WorkoutPlaybackVM", "Sharing workout as text for session ${workoutData.sessionId}")
+                Log.d("WorkoutPlaybackVM", "Sharing workout as text for session ${workoutData.sessionId}")
                 val text = WorkoutReportExporter.exportSimpleSummaryAsText(
                     exerciseName = workoutData.exerciseName,
                     totalReps = workoutData.totalReps,
@@ -100,14 +106,14 @@ class WorkoutPlaybackViewModel @Inject constructor(
                     grade = workoutData.grade,
                     durationMs = workoutData.durationMs
                 )
-                android.util.Log.d("WorkoutPlaybackVM", "Text summary created, length: ${text.length}")
+                Log.d("WorkoutPlaybackVM", "Text summary created, length: ${text.length}")
 
                 withContext(dispatchers.main) {
                     WorkoutReportExporter.shareAsText(context, text)
-                    android.util.Log.d("WorkoutPlaybackVM", "Share intent launched")
+                    Log.d("WorkoutPlaybackVM", "Share intent launched")
                 }
             } catch (e: Exception) {
-                android.util.Log.e("WorkoutPlaybackVM", "Failed to share workout as text", e)
+                Log.e("WorkoutPlaybackVM", "Failed to share workout as text", e)
                 e.printStackTrace()
             } finally {
                 _isExporting.value = false
@@ -122,20 +128,20 @@ class WorkoutPlaybackViewModel @Inject constructor(
         viewModelScope.launch(dispatchers.io) {
             try {
                 _isExporting.value = true
-                android.util.Log.d("WorkoutPlaybackVM", "Sharing workout as PDF for session $sessionId")
+                Log.d("WorkoutPlaybackVM", "Sharing workout as PDF for session $sessionId")
 
                 // Load the full workout data from repository
                 val workout = workoutRepository.getWorkoutById(sessionId)
 
                 if (workout != null) {
                     // Reconstruct a minimal WorkoutReport for PDF export
-                    val report = org.liftrr.domain.analytics.WorkoutReport(
+                    val report = WorkoutReport(
                         sessionId = workout.sessionId,
                         exerciseType = when (workout.exerciseType) {
-                            "SQUAT" -> org.liftrr.ml.ExerciseType.SQUAT
-                            "DEADLIFT" -> org.liftrr.ml.ExerciseType.DEADLIFT
-                            "BENCH_PRESS" -> org.liftrr.ml.ExerciseType.BENCH_PRESS
-                            else -> org.liftrr.ml.ExerciseType.SQUAT
+                            "SQUAT" -> ExerciseType.SQUAT
+                            "DEADLIFT" -> ExerciseType.DEADLIFT
+                            "BENCH_PRESS" -> ExerciseType.BENCH_PRESS
+                            else -> ExerciseType.SQUAT
                         },
                         totalReps = workout.totalReps,
                         goodReps = workout.goodReps,
@@ -148,17 +154,17 @@ class WorkoutPlaybackViewModel @Inject constructor(
                             maxDepth = 0f,
                             consistency = 0f
                         ),
-                        tempo = org.liftrr.domain.analytics.TempoAnalysis(
+                        tempo = TempoAnalysis(
                             averageRepDurationMs = 0L,
                             averageRestBetweenRepsMs = 0L,
                             tempoConsistency = 0f
                         ),
-                        symmetry = org.liftrr.domain.analytics.SymmetryAnalysis(
+                        symmetry = SymmetryAnalysis(
                             overallSymmetry = 0f,
                             leftRightAngleDifference = 0f,
                             issues = emptyList()
                         ),
-                        formConsistency = org.liftrr.domain.analytics.FormConsistencyAnalysis(
+                        formConsistency = FormConsistencyAnalysis(
                             consistencyScore = 0f,
                             qualityTrend = "N/A"
                         ),
@@ -168,20 +174,20 @@ class WorkoutPlaybackViewModel @Inject constructor(
                     )
 
                     val keyFramesJson = workout.keyFramesJson
-                    android.util.Log.d("WorkoutPlaybackVM", "Loaded workout, keyFrames present: ${keyFramesJson != null}")
+                    Log.d("WorkoutPlaybackVM", "Loaded workout, keyFrames present: ${keyFramesJson != null}")
 
                     val pdfFile = WorkoutReportExporter.exportAsPdf(context, report, keyFramesJson)
-                    android.util.Log.d("WorkoutPlaybackVM", "PDF created at: ${pdfFile.absolutePath}, exists: ${pdfFile.exists()}")
+                    Log.d("WorkoutPlaybackVM", "PDF created at: ${pdfFile.absolutePath}, exists: ${pdfFile.exists()}")
 
                     withContext(dispatchers.main) {
                         WorkoutReportExporter.shareReport(context, pdfFile, "application/pdf")
-                        android.util.Log.d("WorkoutPlaybackVM", "Share PDF intent launched")
+                        Log.d("WorkoutPlaybackVM", "Share PDF intent launched")
                     }
                 } else {
-                    android.util.Log.e("WorkoutPlaybackVM", "Workout not found for session $sessionId")
+                    Log.e("WorkoutPlaybackVM", "Workout not found for session $sessionId")
                 }
             } catch (e: Exception) {
-                android.util.Log.e("WorkoutPlaybackVM", "Failed to share workout as PDF", e)
+                Log.e("WorkoutPlaybackVM", "Failed to share workout as PDF", e)
                 e.printStackTrace()
             } finally {
                 _isExporting.value = false

@@ -2,12 +2,11 @@ package org.liftrr.utils
 
 import android.content.Context
 import android.content.Intent
-import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.graphics.Paint
 import android.graphics.pdf.PdfDocument
-import android.net.Uri
 import androidx.core.content.FileProvider
+import androidx.core.graphics.toColorInt
 import com.google.gson.Gson
 import com.google.gson.reflect.TypeToken
 import org.liftrr.domain.analytics.ExerciseSpecificMetrics
@@ -44,7 +43,11 @@ object WorkoutReportExporter {
     /**
      * Internal PDF export with key frames - Enhanced with Liftrr theme
      */
-    private fun exportAsPdfWithFrames(context: Context, report: WorkoutReport, keyFrames: List<KeyFrame>): File {
+    private fun exportAsPdfWithFrames(
+        context: Context,
+        report: WorkoutReport,
+        keyFrames: List<KeyFrame>
+    ): File {
         val pdfDocument = PdfDocument()
         val pageInfo = PdfDocument.PageInfo.Builder(595, 842, 1).create() // A4 size
         val page = pdfDocument.startPage(pageInfo)
@@ -53,15 +56,15 @@ object WorkoutReportExporter {
         val pageWidth = pageInfo.pageWidth.toFloat()
 
         // Liftrr theme colors (from Color.kt)
-        val primaryOrange = android.graphics.Color.parseColor("#FF6B35")
-        val deepBlue = android.graphics.Color.parseColor("#1565C0")
-        val goodGreen = android.graphics.Color.parseColor("#7CB342")
-        val badRed = android.graphics.Color.parseColor("#FF5252")
+        val primaryOrange = "#FF6B35".toColorInt()
+        val deepBlue = "#1565C0".toColorInt()
+        val goodGreen = "#7CB342".toColorInt()
+        val badRed = "#FF5252".toColorInt()
         val darkText = android.graphics.Color.parseColor("#1C1B1F")
-        val lightGray = android.graphics.Color.parseColor("#79747E")
+        val lightGray = "#79747E".toColorInt()
 
         val paint = Paint()
-        val titlePaint = Paint().apply {
+        Paint().apply {
             textSize = 28f
             isFakeBoldText = true
             color = primaryOrange
@@ -104,13 +107,28 @@ object WorkoutReportExporter {
 
         // Date and Exercise info
         val dateFormat = SimpleDateFormat("MMMM dd, yyyy", Locale.getDefault())
-        canvas.drawText("${report.exerciseType.name.replace("_", " ")} • ${dateFormat.format(Date())}", leftMargin, yPosition, textPaint)
+        canvas.drawText(
+            "${
+                report.exerciseType.name.replace(
+                    "_",
+                    " "
+                )
+            } • ${dateFormat.format(Date())}", leftMargin, yPosition, textPaint
+        )
         yPosition += lineSpacing * 1.5f
 
         // Overall Score Section with colored background
         val scoreCardHeight = 90f
         paint.color = android.graphics.Color.parseColor("#FFF5F2")
-        canvas.drawRoundRect(leftMargin, yPosition, pageWidth - rightMargin, yPosition + scoreCardHeight, 12f, 12f, paint)
+        canvas.drawRoundRect(
+            leftMargin,
+            yPosition,
+            pageWidth - rightMargin,
+            yPosition + scoreCardHeight,
+            12f,
+            12f,
+            paint
+        )
 
         yPosition += 22f
         canvas.drawText("Overall Performance", leftMargin + 15, yPosition, headerPaint)
@@ -138,7 +156,12 @@ object WorkoutReportExporter {
         canvas.drawText(report.grade, leftMargin + 100, yPosition, gradePaint)
 
         yPosition += lineSpacing
-        canvas.drawText("${report.totalReps} reps: ${report.goodReps} good • ${report.badReps} needs work", leftMargin + 15, yPosition, subtextPaint)
+        canvas.drawText(
+            "${report.totalReps} reps: ${report.goodReps} good • ${report.badReps} needs work",
+            leftMargin + 15,
+            yPosition,
+            subtextPaint
+        )
 
         yPosition += scoreCardHeight - 42f // Move past the card
         yPosition += lineSpacing
@@ -166,25 +189,82 @@ object WorkoutReportExporter {
 
         // Card 1: ROM
         paint.color = cardBg
-        canvas.drawRoundRect(leftMargin, yPosition, leftMargin + cardWidth, yPosition + cardHeight, 8f, 8f, paint)
+        canvas.drawRoundRect(
+            leftMargin,
+            yPosition,
+            leftMargin + cardWidth,
+            yPosition + cardHeight,
+            8f,
+            8f,
+            paint
+        )
         canvas.drawText("Range of Motion", leftMargin + 12, yPosition + 20, subtextPaint)
-        canvas.drawText(safePercent(report.rangeOfMotion.consistency), leftMargin + 12, yPosition + 48, metricPaint)
+        canvas.drawText(
+            safePercent(report.rangeOfMotion.consistency),
+            leftMargin + 12,
+            yPosition + 48,
+            metricPaint
+        )
 
         // Card 2: Symmetry
-        canvas.drawRoundRect(leftMargin + cardWidth + cardGap, yPosition, leftMargin + 2 * cardWidth + cardGap, yPosition + cardHeight, 8f, 8f, paint)
-        canvas.drawText("Symmetry", leftMargin + cardWidth + cardGap + 12, yPosition + 20, subtextPaint)
-        canvas.drawText(safePercent(report.symmetry.overallSymmetry), leftMargin + cardWidth + cardGap + 12, yPosition + 48, metricPaint)
+        canvas.drawRoundRect(
+            leftMargin + cardWidth + cardGap,
+            yPosition,
+            leftMargin + 2 * cardWidth + cardGap,
+            yPosition + cardHeight,
+            8f,
+            8f,
+            paint
+        )
+        canvas.drawText(
+            "Symmetry",
+            leftMargin + cardWidth + cardGap + 12,
+            yPosition + 20,
+            subtextPaint
+        )
+        canvas.drawText(
+            safePercent(report.symmetry.overallSymmetry),
+            leftMargin + cardWidth + cardGap + 12,
+            yPosition + 48,
+            metricPaint
+        )
 
         yPosition += cardHeight + cardGap
 
         // Card 3: Form Consistency
-        canvas.drawRoundRect(leftMargin, yPosition, leftMargin + cardWidth, yPosition + cardHeight, 8f, 8f, paint)
+        canvas.drawRoundRect(
+            leftMargin,
+            yPosition,
+            leftMargin + cardWidth,
+            yPosition + cardHeight,
+            8f,
+            8f,
+            paint
+        )
         canvas.drawText("Form Consistency", leftMargin + 12, yPosition + 20, subtextPaint)
-        canvas.drawText(safePercent(report.formConsistency.consistencyScore), leftMargin + 12, yPosition + 48, metricPaint)
+        canvas.drawText(
+            safePercent(report.formConsistency.consistencyScore),
+            leftMargin + 12,
+            yPosition + 48,
+            metricPaint
+        )
 
         // Card 4: Quality Trend
-        canvas.drawRoundRect(leftMargin + cardWidth + cardGap, yPosition, leftMargin + 2 * cardWidth + cardGap, yPosition + cardHeight, 8f, 8f, paint)
-        canvas.drawText("Quality Trend", leftMargin + cardWidth + cardGap + 12, yPosition + 20, subtextPaint)
+        canvas.drawRoundRect(
+            leftMargin + cardWidth + cardGap,
+            yPosition,
+            leftMargin + 2 * cardWidth + cardGap,
+            yPosition + cardHeight,
+            8f,
+            8f,
+            paint
+        )
+        canvas.drawText(
+            "Quality Trend",
+            leftMargin + cardWidth + cardGap + 12,
+            yPosition + 20,
+            subtextPaint
+        )
         val trendPaint = Paint().apply {
             textSize = 14f
             isFakeBoldText = true
@@ -194,7 +274,12 @@ object WorkoutReportExporter {
                 else -> lightGray
             }
         }
-        canvas.drawText(report.formConsistency.qualityTrend, leftMargin + cardWidth + cardGap + 12, yPosition + 48, trendPaint)
+        canvas.drawText(
+            report.formConsistency.qualityTrend,
+            leftMargin + cardWidth + cardGap + 12,
+            yPosition + 48,
+            trendPaint
+        )
 
         yPosition += cardHeight + lineSpacing * 1.5f
 
@@ -205,27 +290,74 @@ object WorkoutReportExporter {
 
             when (metrics) {
                 is ExerciseSpecificMetrics.SquatMetrics -> {
-                    canvas.drawText("• Average Depth: ${safePercent(metrics.averageDepth)}", leftMargin + 12, yPosition, textPaint)
+                    canvas.drawText(
+                        "• Average Depth: ${safePercent(metrics.averageDepth)}",
+                        leftMargin + 12,
+                        yPosition,
+                        textPaint
+                    )
                     yPosition += lineSpacing
-                    canvas.drawText("• Knee Alignment: ${safePercent(metrics.kneeTracking.kneeAlignment)}", leftMargin + 12, yPosition, textPaint)
+                    canvas.drawText(
+                        "• Knee Alignment: ${safePercent(metrics.kneeTracking.kneeAlignment)}",
+                        leftMargin + 12,
+                        yPosition,
+                        textPaint
+                    )
                     yPosition += lineSpacing
-                    canvas.drawText("• Hip Mobility: ${safePercent(metrics.hipMobility)}", leftMargin + 12, yPosition, textPaint)
+                    canvas.drawText(
+                        "• Hip Mobility: ${safePercent(metrics.hipMobility)}",
+                        leftMargin + 12,
+                        yPosition,
+                        textPaint
+                    )
                     yPosition += lineSpacing
                 }
+
                 is ExerciseSpecificMetrics.DeadliftMetrics -> {
-                    canvas.drawText("• Hip Hinge Quality: ${safePercent(metrics.hipHingeQuality)}", leftMargin + 12, yPosition, textPaint)
+                    canvas.drawText(
+                        "• Hip Hinge Quality: ${safePercent(metrics.hipHingeQuality)}",
+                        leftMargin + 12,
+                        yPosition,
+                        textPaint
+                    )
                     yPosition += lineSpacing
-                    canvas.drawText("• Spine Neutral: ${safePercent(metrics.backStraightness.spineNeutral)}", leftMargin + 12, yPosition, textPaint)
+                    canvas.drawText(
+                        "• Spine Neutral: ${safePercent(metrics.backStraightness.spineNeutral)}",
+                        leftMargin + 12,
+                        yPosition,
+                        textPaint
+                    )
                     yPosition += lineSpacing
-                    canvas.drawText("• Lockout: ${safePercent(metrics.lockoutCompletion)}", leftMargin + 12, yPosition, textPaint)
+                    canvas.drawText(
+                        "• Lockout: ${safePercent(metrics.lockoutCompletion)}",
+                        leftMargin + 12,
+                        yPosition,
+                        textPaint
+                    )
                     yPosition += lineSpacing
                 }
+
                 is ExerciseSpecificMetrics.BenchPressMetrics -> {
-                    canvas.drawText("• Bottom Angle: ${metrics.elbowAngle.bottomAngle.toInt()}°", leftMargin + 12, yPosition, textPaint)
+                    canvas.drawText(
+                        "• Bottom Angle: ${metrics.elbowAngle.bottomAngle.toInt()}°",
+                        leftMargin + 12,
+                        yPosition,
+                        textPaint
+                    )
                     yPosition += lineSpacing
-                    canvas.drawText("• Elbow Tucking: ${safePercent(metrics.elbowAngle.tucking)}", leftMargin + 12, yPosition, textPaint)
+                    canvas.drawText(
+                        "• Elbow Tucking: ${safePercent(metrics.elbowAngle.tucking)}",
+                        leftMargin + 12,
+                        yPosition,
+                        textPaint
+                    )
                     yPosition += lineSpacing
-                    canvas.drawText("• Shoulder Stability: ${safePercent(metrics.shoulderPosition.stability)}", leftMargin + 12, yPosition, textPaint)
+                    canvas.drawText(
+                        "• Shoulder Stability: ${safePercent(metrics.shoulderPosition.stability)}",
+                        leftMargin + 12,
+                        yPosition,
+                        textPaint
+                    )
                     yPosition += lineSpacing
                 }
             }
@@ -270,7 +402,12 @@ object WorkoutReportExporter {
             textSize = 10f
             color = android.graphics.Color.GRAY
         }
-        canvas.drawText("Generated by Liftrr - Your AI Fitness Coach", leftMargin, yPosition, footerPaint)
+        canvas.drawText(
+            "Generated by Liftrr - Your AI Fitness Coach",
+            leftMargin,
+            yPosition,
+            footerPaint
+        )
 
         pdfDocument.finishPage(page)
 
@@ -300,7 +437,14 @@ object WorkoutReportExporter {
             appendLine("=== LIFTRR WORKOUT REPORT ===")
             appendLine()
             appendLine("Exercise: ${report.exerciseType.name.replace("_", " ")}")
-            appendLine("Date: ${SimpleDateFormat("MMMM dd, yyyy 'at' hh:mm a", Locale.getDefault()).format(Date())}")
+            appendLine(
+                "Date: ${
+                    SimpleDateFormat(
+                        "MMMM dd, yyyy 'at' hh:mm a",
+                        Locale.getDefault()
+                    ).format(Date())
+                }"
+            )
             appendLine()
             appendLine("OVERALL PERFORMANCE")
             appendLine("Score: ${report.overallScore.toInt()}% (Grade: ${report.grade})")
@@ -322,11 +466,13 @@ object WorkoutReportExporter {
                         appendLine("Knee Tracking: ${metrics.kneeTracking.kneeAlignment.toInt()}%")
                         appendLine("Hip Mobility: ${metrics.hipMobility.toInt()}%")
                     }
+
                     is ExerciseSpecificMetrics.DeadliftMetrics -> {
                         appendLine("Hip Hinge Quality: ${metrics.hipHingeQuality.toInt()}%")
                         appendLine("Back Straightness: ${metrics.backStraightness.spineNeutral.toInt()}%")
                         appendLine("Lockout Completion: ${metrics.lockoutCompletion.toInt()}%")
                     }
+
                     is ExerciseSpecificMetrics.BenchPressMetrics -> {
                         appendLine("Bottom Elbow Angle: ${metrics.elbowAngle.bottomAngle.toInt()}°")
                         appendLine("Elbow Tucking: ${metrics.elbowAngle.tucking.toInt()}%")
@@ -354,9 +500,7 @@ object WorkoutReportExporter {
     fun shareReport(context: Context, file: File, mimeType: String = "application/pdf") {
         try {
             val uri = FileProvider.getUriForFile(
-                context,
-                "${context.packageName}.fileprovider",
-                file
+                context, "${context.packageName}.fileprovider", file
             )
 
             val shareIntent = Intent(Intent.ACTION_SEND).apply {
@@ -416,7 +560,14 @@ object WorkoutReportExporter {
             appendLine("=== LIFTRR WORKOUT REPORT ===")
             appendLine()
             appendLine("Exercise: $exerciseName")
-            appendLine("Date: ${SimpleDateFormat("MMMM dd, yyyy 'at' hh:mm a", Locale.getDefault()).format(Date())}")
+            appendLine(
+                "Date: ${
+                    SimpleDateFormat(
+                        "MMMM dd, yyyy 'at' hh:mm a",
+                        Locale.getDefault()
+                    ).format(Date())
+                }"
+            )
             appendLine()
             appendLine("PERFORMANCE SUMMARY")
             appendLine("Score: ${overallScore.toInt()}% (Grade: $grade)")
@@ -440,8 +591,7 @@ object WorkoutReportExporter {
         if (keyFrames.isEmpty()) return
 
         // Group frames by movement phase
-        val framesByPhase = keyFrames.filter { it.movementPhase != null }
-            .groupBy { it.movementPhase!! }
+        keyFrames.filter { it.movementPhase != null }.groupBy { it.movementPhase!! }
 
         // Find best and worst rep numbers
         val bestRepFrames = keyFrames.filter { it.frameType == KeyFrameType.BEST_REP }
@@ -476,7 +626,12 @@ object WorkoutReportExporter {
 
             // Title on first page
             if (pageNumber == 3) {
-                canvas.drawText("Form Comparison: Best vs Worst Rep", leftMargin, yPosition, headerPaint)
+                canvas.drawText(
+                    "Form Comparison: Best vs Worst Rep",
+                    leftMargin,
+                    yPosition,
+                    headerPaint
+                )
                 yPosition += lineSpacing * 2
             }
 
@@ -484,8 +639,10 @@ object WorkoutReportExporter {
                 val phaseName = phase.name.lowercase().replaceFirstChar { it.uppercase() }
 
                 // Get frames for this phase from best and worst reps
-                val goodFrame = keyFrames.find { it.repNumber == bestRepNumber && it.movementPhase == phase }
-                val badFrame = keyFrames.find { it.repNumber == worstRepNumber && it.movementPhase == phase }
+                val goodFrame =
+                    keyFrames.find { it.repNumber == bestRepNumber && it.movementPhase == phase }
+                val badFrame =
+                    keyFrames.find { it.repNumber == worstRepNumber && it.movementPhase == phase }
 
                 if (goodFrame != null || badFrame != null) {
                     // Phase header
@@ -531,17 +688,36 @@ object WorkoutReportExporter {
                                 // Display diagnostics or key angles
                                 if (frame.diagnostics.isNotEmpty()) {
                                     frame.diagnostics.take(3).forEach { diagnostic ->
-                                        canvas.drawText("• ${diagnostic.angle}: ${diagnostic.measured.toInt()}°", leftMargin, labelY, diagPaint)
+                                        canvas.drawText(
+                                            "• ${diagnostic.angle}: ${diagnostic.measured.toInt()}°",
+                                            leftMargin,
+                                            labelY,
+                                            diagPaint
+                                        )
                                         labelY += 11f
-                                        canvas.drawText("  ${diagnostic.expected}", leftMargin, labelY, diagPaint)
+                                        canvas.drawText(
+                                            "  ${diagnostic.expected}",
+                                            leftMargin,
+                                            labelY,
+                                            diagPaint
+                                        )
                                         labelY += 11f
                                     }
                                 } else {
-                                    canvas.drawText("All angles within range", leftMargin, labelY, diagPaint)
+                                    canvas.drawText(
+                                        "All angles within range",
+                                        leftMargin,
+                                        labelY,
+                                        diagPaint
+                                    )
                                 }
                             }
                         } catch (e: Exception) {
-                            android.util.Log.e("WorkoutReportExporter", "Error loading good form image", e)
+                            android.util.Log.e(
+                                "WorkoutReportExporter",
+                                "Error loading good form image",
+                                e
+                            )
                         }
                     }
 
@@ -552,10 +728,7 @@ object WorkoutReportExporter {
                             if (bitmap != null) {
                                 val rightX = leftMargin + imageWidth + 15f
                                 val destRect = android.graphics.RectF(
-                                    rightX,
-                                    yPosition,
-                                    rightX + imageWidth,
-                                    yPosition + imageHeight
+                                    rightX, yPosition, rightX + imageWidth, yPosition + imageHeight
                                 )
                                 canvas.drawBitmap(bitmap, null, destRect, null)
                                 bitmap.recycle()
@@ -580,21 +753,45 @@ object WorkoutReportExporter {
                                 if (frame.diagnostics.isNotEmpty()) {
                                     frame.diagnostics.take(3).forEach { diagnostic ->
                                         // Issue description
-                                        canvas.drawText("• ${diagnostic.issue}", rightX, labelY, diagPaint)
+                                        canvas.drawText(
+                                            "• ${diagnostic.issue}",
+                                            rightX,
+                                            labelY,
+                                            diagPaint
+                                        )
                                         labelY += 11f
                                         // Measured angle
-                                        canvas.drawText("  ${diagnostic.angle}: ${diagnostic.measured.toInt()}°", rightX, labelY, diagPaint)
+                                        canvas.drawText(
+                                            "  ${diagnostic.angle}: ${diagnostic.measured.toInt()}°",
+                                            rightX,
+                                            labelY,
+                                            diagPaint
+                                        )
                                         labelY += 11f
                                         // Expected range
-                                        canvas.drawText("  Expected: ${diagnostic.expected}", rightX, labelY, diagPaint)
+                                        canvas.drawText(
+                                            "  Expected: ${diagnostic.expected}",
+                                            rightX,
+                                            labelY,
+                                            diagPaint
+                                        )
                                         labelY += 11f
                                     }
                                 } else {
-                                    canvas.drawText("Low form score - check technique", rightX, labelY, diagPaint)
+                                    canvas.drawText(
+                                        "Low form score - check technique",
+                                        rightX,
+                                        labelY,
+                                        diagPaint
+                                    )
                                 }
                             }
                         } catch (e: Exception) {
-                            android.util.Log.e("WorkoutReportExporter", "Error loading bad form image", e)
+                            android.util.Log.e(
+                                "WorkoutReportExporter",
+                                "Error loading bad form image",
+                                e
+                            )
                         }
                     }
 
@@ -607,7 +804,12 @@ object WorkoutReportExporter {
                 textSize = 10f
                 color = android.graphics.Color.GRAY
             }
-            canvas.drawText("Page ${pageNumber - 1} - Movement Analysis", leftMargin, 820f, footerPaint)
+            canvas.drawText(
+                "Page ${pageNumber - 1} - Movement Analysis",
+                leftMargin,
+                820f,
+                footerPaint
+            )
 
             pdfDocument.finishPage(page)
         }
@@ -644,10 +846,7 @@ object WorkoutReportExporter {
                     val scaledHeight = bitmap.height * scale
 
                     val destRect = android.graphics.RectF(
-                        leftMargin,
-                        yPosition,
-                        leftMargin + scaledWidth,
-                        yPosition + scaledHeight
+                        leftMargin, yPosition, leftMargin + scaledWidth, yPosition + scaledHeight
                     )
                     canvas.drawBitmap(bitmap, null, destRect, null)
                     bitmap.recycle()

@@ -1,365 +1,204 @@
 package org.liftrr.domain.workout
 
-import com.google.mediapipe.tasks.components.containers.NormalizedLandmark
-import org.liftrr.ml.PoseAnalyzer
 import org.liftrr.ml.PoseDetectionResult
-import org.liftrr.ml.PoseLandmarks
 import kotlin.math.abs
 
 class DeadliftExercise : Exercise {
 
-    private var isAtBottom = false
-    private var bottomFrameCount = 0
-    private var topFrameCount = 0  // Track frames at lockout position
+    enum class State { SETUP, ASCENDING, LOCKOUT, DESCENDING }
+
+    // --- State & Timing ---
+    private var currentState = State.SETUP
     private var lastRepTime = 0L
+    private var frameStabilityCount = 0
 
-    private val hipAngleSmoother = AngleSmoother(3)
-    private val trunkSmoother = AngleSmoother(3)
+    // --- Smoothing Filters ---
+    private val hipSmoother = AngleSmoother(5)
+    private val kneeSmoother = AngleSmoother(5)
 
-    private var lastSmoothedHipAngle = 180f
-    private var lastSmoothedTrunkRatio = 1f
-
-    private var wentTooLowDuringRep = false
-    private var repMinTrunkAlignment = Float.MAX_VALUE
-    private var repMinHipAngle = Float.MAX_VALUE
-    private var repMaxLockoutAngle = 0f
+    // --- Metrics for Score Calculation ---
+    private var repMinKneeAngle = 180f
+    private var repMaxShoulderDrift = 0f
+    private var worstBackRatio = 1.0f
     private var lastFormScore = 100f
 
     companion object {
-        // Stricter stability requirements to prevent false reps
-        private const val MIN_FRAMES_FOR_STABILITY = 6  // ~200ms at 30fps
-        private const val MIN_REP_DURATION_MS = 1200L   // Minimum 1.2 seconds per rep
-        private const val MIN_FRAMES_AT_TOP = 3         // Must hold lockout position
+        // Biomechanical Logic Thresholds
+        private const val HIP_START_THRESHOLD = 125f  // Hinge depth to start
+        private const val HIP_LOCKOUT_TARGET = 168f   // Full extension target
+        private const val KNEE_SQUAT_MIN = 95f        // Angle < 95 indicates "squatting" the lift
+        private const val DRIFT_MAX_X = 0.10f         // Horizontal drift allowance
+        private const val BACK_SAFETY_RATIO = 0.82f   // Torso height vs Thigh height
 
-        private const val BOTTOM_ENTRY_ANGLE = 115f
-        private const val BOTTOM_EXIT_ANGLE = 130f
-        private const val TOP_ANGLE_THRESHOLD = 165f    // Stricter lockout requirement
-        private const val SQUAT_THRESHOLD = 80f
-
-        private const val TRUNK_ALIGNMENT_THRESHOLD = 0.85f
-
-        private const val SQUATTING_PENALTY = 40f
-        private const val BACK_ROUNDING_PENALTY_WEIGHT = 30f
-        private const val LOCKOUT_PENALTY_WEIGHT = 20f
-    }
-
-    override fun analyzeFeedback(pose: PoseDetectionResult.Success): String {
-        val leftShoulder = pose.getLandmark(PoseLandmarks.LEFT_SHOULDER)
-        val rightShoulder = pose.getLandmark(PoseLandmarks.RIGHT_SHOULDER)
-        val leftHip = pose.getLandmark(PoseLandmarks.LEFT_HIP)
-        val rightHip = pose.getLandmark(PoseLandmarks.RIGHT_HIP)
-        val leftKnee = pose.getLandmark(PoseLandmarks.LEFT_KNEE)
-        val rightKnee = pose.getLandmark(PoseLandmarks.RIGHT_KNEE)
-
-        if (leftShoulder == null || rightShoulder == null || leftHip == null ||
-            rightHip == null || leftKnee == null || rightKnee == null
-        ) {
-            return "Move into frame"
-        }
-
-        if (lastSmoothedTrunkRatio < TRUNK_ALIGNMENT_THRESHOLD && lastSmoothedHipAngle < BOTTOM_EXIT_ANGLE) {
-            return "Keep back straight!"
-        }
-
-        return when {
-            lastSmoothedHipAngle < SQUAT_THRESHOLD -> "Don't squat - hinge at hips!"
-            lastSmoothedHipAngle < 100f -> "Too bent - engage hips"
-            lastSmoothedHipAngle > 170f -> "Good lockout!"
-            lastSmoothedHipAngle > TOP_ANGLE_THRESHOLD -> "Almost locked out"
-            lastSmoothedHipAngle > 140f -> "Drive hips forward"
-            else -> "Keep pulling"
-        }
+        private const val MIN_REP_DURATION_MS = 1100L
+        private const val STABILITY_REQUIRED = 3
     }
 
     override fun updateRepCount(pose: PoseDetectionResult.Success): Boolean {
-        val leftShoulder = pose.getLandmark(PoseLandmarks.LEFT_SHOULDER)
-        val leftHip = pose.getLandmark(PoseLandmarks.LEFT_HIP)
-        val leftKnee = pose.getLandmark(PoseLandmarks.LEFT_KNEE)
-        val rightShoulder = pose.getLandmark(PoseLandmarks.RIGHT_SHOULDER)
-        val rightHip = pose.getLandmark(PoseLandmarks.RIGHT_HIP)
-        val rightKnee = pose.getLandmark(PoseLandmarks.RIGHT_KNEE)
+        // 1. Calculate and Smooth Key Angles
+        val hipAngle = getBilateralAngle(pose, 11, 23, 25) // Shoulder, Hip, Knee
+        val kneeAngle = getBilateralAngle(pose, 23, 25, 27) // Hip, Knee, Ankle
 
-        val hipAngle = BilateralAngleCalculator.calculateBilateralAngle(
-            leftShoulder, leftHip, leftKnee,
-            rightShoulder, rightHip, rightKnee
-        )
+        if (hipAngle == null || kneeAngle == null) return false
 
-        if (hipAngle == null) {
-            bottomFrameCount = 0
-            return false
+        val smoothedHip = hipSmoother.add(hipAngle)
+        val smoothedKnee = kneeSmoother.add(kneeAngle)
+
+        // 2. Spine Neutrality (Normalized to camera distance)
+        val currentBackRatio = calculateNormalizedSpine(pose)
+        if (currentBackRatio < worstBackRatio) worstBackRatio = currentBackRatio
+
+        // 3. Horizontal Bar Path Drift (Shoulder X vs Ankle X)
+        val avgShoulderX = (pose.getLandmark(11)!!.x() + pose.getLandmark(12)!!.x()) / 2f
+        val avgAnkleX = (pose.getLandmark(27)!!.x() + pose.getLandmark(28)!!.x()) / 2f
+        val currentDrift = abs(avgShoulderX - avgAnkleX)
+
+        // Track technical flaws only during the active ascent
+        if (currentState == State.ASCENDING) {
+            if (smoothedKnee < repMinKneeAngle) repMinKneeAngle = smoothedKnee
+            if (currentDrift > repMaxShoulderDrift) repMaxShoulderDrift = currentDrift
         }
 
-        val smoothedHip = hipAngleSmoother.add(hipAngle)
-        lastSmoothedHipAngle = smoothedHip
+        return handleStateMachine(smoothedHip)
+    }
 
-        if (smoothedHip < repMinHipAngle) repMinHipAngle = smoothedHip
-        if (smoothedHip > repMaxLockoutAngle) repMaxLockoutAngle = smoothedHip
-
-        val trunkRatio = calculateBilateralTrunkAlignment(
-            leftShoulder, leftHip, leftKnee,
-            rightShoulder, rightHip, rightKnee
-        )
-        val smoothedTrunk = trunkSmoother.add(trunkRatio)
-        lastSmoothedTrunkRatio = smoothedTrunk
-        if (smoothedTrunk < repMinTrunkAlignment) repMinTrunkAlignment = smoothedTrunk
-
-        if (smoothedHip < SQUAT_THRESHOLD) {
-            wentTooLowDuringRep = true
-        }
-
-        val isAtBottomPosition = smoothedHip < BOTTOM_ENTRY_ANGLE
-
-        if (isAtBottomPosition) {
-            bottomFrameCount++
-            topFrameCount = 0  // Reset top counter when at bottom
-            if (bottomFrameCount >= MIN_FRAMES_FOR_STABILITY && !isAtBottom) {
-                isAtBottom = true
-                wentTooLowDuringRep = false
-                repMinTrunkAlignment = Float.MAX_VALUE
-                repMaxLockoutAngle = 0f
-            }
-        } else if (smoothedHip > TOP_ANGLE_THRESHOLD && isAtBottom) {
-            // At top position - increment top frame counter
-            topFrameCount++
-            bottomFrameCount = 0
-
-            // Only count rep if held at top for required frames AND minimum duration met
-            if (topFrameCount >= MIN_FRAMES_AT_TOP) {
-                val currentTime = System.currentTimeMillis()
-                if (currentTime - lastRepTime >= MIN_REP_DURATION_MS) {
-                    isAtBottom = false
-                    topFrameCount = 0
-                    lastRepTime = currentTime
-                    lastFormScore = calculateFormScore()
-                    resetRepTracking()
-                    return true
+    private fun handleStateMachine(hip: Float): Boolean {
+        return when (currentState) {
+            State.SETUP -> {
+                if (hip < HIP_START_THRESHOLD) {
+                    frameStabilityCount++
+                    if (frameStabilityCount >= STABILITY_REQUIRED) {
+                        currentState = State.ASCENDING
+                        frameStabilityCount = 0
+                    }
                 }
+                false
             }
-        } else {
-            // In transition zone - reset counters
-            if (!isAtBottomPosition) {
-                bottomFrameCount = 0
+            State.ASCENDING -> {
+                if (hip >= HIP_LOCKOUT_TARGET) currentState = State.LOCKOUT
+                false
             }
-            if (smoothedHip <= TOP_ANGLE_THRESHOLD) {
-                topFrameCount = 0
+            State.LOCKOUT -> {
+                // Confirm rep when hips drop significantly below lockout (start of descent)
+                if (hip < HIP_LOCKOUT_TARGET - 6f) {
+                    val now = System.currentTimeMillis()
+                    if (now - lastRepTime > MIN_REP_DURATION_MS) {
+                        completeRep(now)
+                        return true
+                    }
+                    currentState = State.DESCENDING
+                }
+                false
             }
-        }
-
-        return false
-    }
-
-    override fun hadGoodForm(): Boolean = lastFormScore >= 60f
-
-    override fun formScore(): Float = lastFormScore
-
-    private fun calculateBilateralTrunkAlignment(
-        leftShoulder: NormalizedLandmark?,
-        leftHip: NormalizedLandmark?,
-        leftKnee: NormalizedLandmark?,
-        rightShoulder: NormalizedLandmark?,
-        rightHip: NormalizedLandmark?,
-        rightKnee: NormalizedLandmark?
-    ): Float {
-        val leftRatio = if (leftShoulder != null && leftHip != null && leftKnee != null) {
-            calculateTrunkAlignment(leftShoulder, leftHip, leftKnee)
-        } else null
-
-        val rightRatio = if (rightShoulder != null && rightHip != null && rightKnee != null) {
-            calculateTrunkAlignment(rightShoulder, rightHip, rightKnee)
-        } else null
-
-        return when {
-            leftRatio != null && rightRatio != null -> (leftRatio + rightRatio) / 2f
-            leftRatio != null -> leftRatio
-            rightRatio != null -> rightRatio
-            else -> 1f
+            State.DESCENDING -> {
+                if (hip < HIP_START_THRESHOLD) currentState = State.SETUP
+                false
+            }
         }
     }
 
-    private fun calculateTrunkAlignment(
-        shoulder: NormalizedLandmark,
-        hip: NormalizedLandmark,
-        knee: NormalizedLandmark
-    ): Float {
-        val shoulderToHipY = abs(shoulder.y() - hip.y())
-        val hipToKneeY = abs(hip.y() - knee.y())
-        if (hipToKneeY < 0.01f) return 1f
-        return (shoulderToHipY / hipToKneeY).coerceIn(0f, 2f)
+    private fun calculateNormalizedSpine(pose: PoseDetectionResult.Success): Float {
+        val s = pose.getLandmark(11) ?: return 1.0f
+        val h = pose.getLandmark(23) ?: return 1.0f
+        val k = pose.getLandmark(25) ?: return 1.0f
+
+        val torsoVerticalHeight = abs(s.y() - h.y())
+        val thighVerticalHeight = abs(h.y() - k.y())
+
+        if (thighVerticalHeight < 0.01f) return 1.0f
+        return torsoVerticalHeight / thighVerticalHeight
     }
 
     private fun calculateFormScore(): Float {
         var score = 100f
 
-        if (wentTooLowDuringRep) {
-            score -= SQUATTING_PENALTY
+        // Priority 1: Back Rounding (Safety Hazard)
+        if (worstBackRatio < BACK_SAFETY_RATIO) {
+            val backPenalty = ((BACK_SAFETY_RATIO - worstBackRatio) * 300f).coerceAtMost(50f)
+            score -= backPenalty
         }
 
-        if (repMinTrunkAlignment < TRUNK_ALIGNMENT_THRESHOLD) {
-            val deviation = ((TRUNK_ALIGNMENT_THRESHOLD - repMinTrunkAlignment) / 0.3f).coerceIn(0f, 1f)
-            score -= deviation * BACK_ROUNDING_PENALTY_WEIGHT
-        }
+        // Priority 2: Hip Hinge Quality (Preventing Squatting)
+        if (repMinKneeAngle < KNEE_SQUAT_MIN) score -= 20f
 
-        if (repMaxLockoutAngle < TOP_ANGLE_THRESHOLD) {
-            val deviation = ((TOP_ANGLE_THRESHOLD - repMaxLockoutAngle) / 25f).coerceIn(0f, 1f)
-            score -= deviation * LOCKOUT_PENALTY_WEIGHT
-        }
+        // Priority 3: Bar Path Verticality
+        if (repMaxShoulderDrift > DRIFT_MAX_X) score -= 15f
 
         return score.coerceIn(0f, 100f)
     }
 
-    private fun resetRepTracking() {
-        wentTooLowDuringRep = false
-        repMinTrunkAlignment = Float.MAX_VALUE
-        repMinHipAngle = Float.MAX_VALUE
-        repMaxLockoutAngle = 0f
+    override fun analyzeFeedback(pose: PoseDetectionResult.Success): String {
+        val currentBack = calculateNormalizedSpine(pose)
+        val hip = hipSmoother.lastValue
+
+        return when {
+            currentBack < BACK_SAFETY_RATIO -> "Flatten your back! Chest up."
+            repMaxShoulderDrift > DRIFT_MAX_X -> "Keep the bar closer to your body."
+            repMinKneeAngle < KNEE_SQUAT_MIN -> "Hips higher! Don't squat the weight."
+            hip >= HIP_LOCKOUT_TARGET -> "Perfect lockout! Now lower slowly."
+            else -> "Drive through your heels!"
+        }
     }
 
     override fun detectMovementPhase(pose: PoseDetectionResult.Success): MovementPhase {
-        val landmarks = pose.landmarks
-        val leftShoulder = landmarks.getOrNull(11)
-        val leftHip = landmarks.getOrNull(23)
-        val leftKnee = landmarks.getOrNull(25)
-        val rightShoulder = landmarks.getOrNull(12)
-        val rightHip = landmarks.getOrNull(24)
-        val rightKnee = landmarks.getOrNull(26)
-
-        // Use bilateral angle calculation
-        val hipAngle = BilateralAngleCalculator.calculateBilateralAngle(
-            leftShoulder, leftHip, leftKnee,
-            rightShoulder, rightHip, rightKnee
-        ) ?: return MovementPhase.TRANSITION
-
+        val hip = hipSmoother.lastValue
         return when {
-            // Lockout/Standing position (hip angle > 160°)
-            hipAngle >= 160f -> MovementPhase.LOCKOUT
-
-            // Setup/Starting position (hip angle 80-120° - hinged position)
-            hipAngle in 80f..120f && !isAtBottom -> MovementPhase.SETUP
-
-            // Bottom position/Breaking from floor (hip angle 60-85°)
-            hipAngle in 60f..85f -> MovementPhase.BOTTOM
-
-            // Mid-pull ascending (hip angle 120-160°)
-            hipAngle in 120f..160f && isAtBottom -> MovementPhase.ASCENT
-
-            // Transitional positions
-            else -> MovementPhase.TRANSITION
+            hip >= HIP_LOCKOUT_TARGET -> MovementPhase.LOCKOUT
+            currentState == State.ASCENDING -> MovementPhase.ASCENT
+            currentState == State.DESCENDING || hip < HIP_START_THRESHOLD -> MovementPhase.BOTTOM
+            else -> MovementPhase.SETUP
         }
     }
 
     override fun getFormDiagnostics(pose: PoseDetectionResult.Success): List<FormDiagnostic> {
-        val diagnostics = mutableListOf<FormDiagnostic>()
-        val landmarks = pose.landmarks
+        val backRatio = calculateNormalizedSpine(pose)
+        val hip = hipSmoother.lastValue
 
-        val leftShoulder = landmarks.getOrNull(11)
-        val leftHip = landmarks.getOrNull(23)
-        val leftKnee = landmarks.getOrNull(25)
-        val rightShoulder = landmarks.getOrNull(12)
-        val rightHip = landmarks.getOrNull(24)
-        val rightKnee = landmarks.getOrNull(26)
-
-        // 1. Check hip angle for proper lockout - always report
-        val hipAngle = BilateralAngleCalculator.calculateBilateralAngle(
-            leftShoulder, leftHip, leftKnee,
-            rightShoulder, rightHip, rightKnee
+        return listOf(
+            FormDiagnostic(
+                issue = if (backRatio < BACK_SAFETY_RATIO) "Rounded Spine" else "Neutral Spine",
+                angle = "Torso Ratio",
+                measured = backRatio * 100,
+                expected = "82%+",
+                severity = if (backRatio < BACK_SAFETY_RATIO) FormIssueSeverity.CRITICAL else FormIssueSeverity.GOOD
+            ),
+            FormDiagnostic(
+                issue = "Hip Lockout",
+                angle = "Hip Angle",
+                measured = hip,
+                expected = "${HIP_LOCKOUT_TARGET.toInt()}°",
+                severity = if (hip >= HIP_LOCKOUT_TARGET) FormIssueSeverity.GOOD else FormIssueSeverity.MODERATE
+            )
         )
+    }
 
-        hipAngle?.let { angle ->
-            if (angle < TOP_ANGLE_THRESHOLD && isAtBottom) {
-                diagnostics.add(
-                    FormDiagnostic(
-                        issue = "Incomplete lockout",
-                        angle = "Hip angle",
-                        measured = angle,
-                        expected = "≥ ${TOP_ANGLE_THRESHOLD.toInt()}°",
-                        severity = if (angle < 150f) FormIssueSeverity.CRITICAL else FormIssueSeverity.MODERATE
-                    )
-                )
-            } else if (isAtBottom && angle >= TOP_ANGLE_THRESHOLD) {
-                diagnostics.add(
-                    FormDiagnostic(
-                        issue = "Full lockout achieved",
-                        angle = "Hip angle",
-                        measured = angle,
-                        expected = "≥ ${TOP_ANGLE_THRESHOLD.toInt()}° ✓",
-                        severity = FormIssueSeverity.GOOD
-                    )
-                )
-            }
-        }
+    private fun completeRep(time: Long) {
+        lastFormScore = calculateFormScore()
+        lastRepTime = time
+        resetRepMetrics()
+        currentState = State.SETUP
+    }
 
-        // 2. Check back straightness (trunk alignment) - always report
-        val leftAnkle = landmarks.getOrNull(27)
-        val rightAnkle = landmarks.getOrNull(28)
-
-        val trunkRatio = if (leftShoulder != null && leftHip != null && leftAnkle != null) {
-            val shoulderHipDist = kotlin.math.abs(leftShoulder.x() - leftHip.x())
-            val hipAnkleDist = kotlin.math.abs(leftHip.x() - leftAnkle.x())
-            if (hipAnkleDist > 0.01f) shoulderHipDist / hipAnkleDist else 1f
-        } else null
-
-        trunkRatio?.let { ratio ->
-            if (ratio < 0.7f) {
-                diagnostics.add(
-                    FormDiagnostic(
-                        issue = "Rounded back - excessive forward lean",
-                        angle = "Back straightness",
-                        measured = ratio * 100f,
-                        expected = "≥ 70%",
-                        severity = FormIssueSeverity.CRITICAL
-                    )
-                )
-            } else {
-                diagnostics.add(
-                    FormDiagnostic(
-                        issue = "Neutral spine maintained",
-                        angle = "Back straightness",
-                        measured = ratio * 100f,
-                        expected = "≥ 70% ✓",
-                        severity = FormIssueSeverity.GOOD
-                    )
-                )
-            }
-        }
-
-        // 3. Check hip starting position - always report if at bottom
-        hipAngle?.let { angle ->
-            if (angle < 50f && !isAtBottom) {
-                diagnostics.add(
-                    FormDiagnostic(
-                        issue = "Hips too low - turning into squat",
-                        angle = "Hip starting position",
-                        measured = angle,
-                        expected = "60-120°",
-                        severity = FormIssueSeverity.MODERATE
-                    )
-                )
-            } else if (!isAtBottom && angle in 60f..120f) {
-                diagnostics.add(
-                    FormDiagnostic(
-                        issue = "Good hip hinge position",
-                        angle = "Hip starting position",
-                        measured = angle,
-                        expected = "60-120° ✓",
-                        severity = FormIssueSeverity.GOOD
-                    )
-                )
-            }
-        }
-
-        return diagnostics
+    private fun resetRepMetrics() {
+        repMinKneeAngle = 180f
+        repMaxShoulderDrift = 0f
+        worstBackRatio = 1.0f
     }
 
     override fun reset() {
-        isAtBottom = false
-        bottomFrameCount = 0
-        topFrameCount = 0
+        currentState = State.SETUP
         lastRepTime = 0L
-        lastFormScore = 100f
-        lastSmoothedHipAngle = 180f
-        lastSmoothedTrunkRatio = 1f
-        hipAngleSmoother.reset()
-        trunkSmoother.reset()
-        resetRepTracking()
+        resetRepMetrics()
+        hipSmoother.reset()
+        kneeSmoother.reset()
     }
+
+    private fun getBilateralAngle(pose: PoseDetectionResult.Success, a: Int, b: Int, c: Int): Float? {
+        val left = AngleCalculator.calculateAngle(pose.getLandmark(a), pose.getLandmark(b), pose.getLandmark(c))
+        val right = AngleCalculator.calculateAngle(pose.getLandmark(a + 1), pose.getLandmark(b + 1), pose.getLandmark(c + 1))
+        return if (left != null && right != null) (left + right) / 2f else left ?: right
+    }
+
+    override fun formScore(): Float = lastFormScore
+    override fun hadGoodForm(): Boolean = lastFormScore >= 70f
 }

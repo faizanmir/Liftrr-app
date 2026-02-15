@@ -116,26 +116,19 @@ object BilateralAngleCalculator {
     }
 }
 
-class AngleSmoother(private val windowSize: Int = 3) {
-    private val buffer = FloatArray(windowSize)
-    private var count = 0
-    private var index = 0
+class AngleSmoother(private val windowSize: Int) {
+    private val queue = mutableListOf<Float>()
+    var lastValue: Float = 0f
 
     fun add(value: Float): Float {
-        buffer[index] = value
-        index = (index + 1) % windowSize
-        if (count < windowSize) count++
-
-        if (count == 0) return value
-
-        var sum = 0f
-        for (i in 0 until count) sum += buffer[i]
-        return sum / count
+        queue.add(value)
+        if (queue.size > windowSize) queue.removeAt(0)
+        lastValue = if (queue.isEmpty()) 0f else queue.average().toFloat()
+        return lastValue
     }
 
     fun reset() {
-        buffer.fill(0f)
-        count = 0
-        index = 0
+        queue.clear()
+        lastValue = 0f
     }
 }

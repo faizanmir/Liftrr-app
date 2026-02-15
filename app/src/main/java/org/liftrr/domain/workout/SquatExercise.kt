@@ -1,359 +1,188 @@
 package org.liftrr.domain.workout
 
-import org.liftrr.ml.PoseAnalyzer
 import org.liftrr.ml.PoseDetectionResult
-import org.liftrr.ml.PoseLandmarks
+import kotlin.math.abs
 
 class SquatExercise : Exercise {
 
-    private var isAtBottom = false
-    private var bottomFrameCount = 0
-    private var topFrameCount = 0  // Track frames at standing position
+    enum class State { STANDING, DESCENT, BOTTOM, ASCENT }
+
+    private var currentState = State.STANDING
     private var lastRepTime = 0L
+    private var frameStabilityCount = 0
 
-    private val kneeAngleSmoother = AngleSmoother(3)
-    private val hipAngleSmoother = AngleSmoother(3)
+    private val kneeSmoother = AngleSmoother(5)
+    private val hipSmoother = AngleSmoother(5)
 
-    private var lastSmoothedKneeAngle = 180f
-    private var lastSmoothedHipAngle = 90f
-    private var usingAngleMode = false
-
-    private var repMinKneeAngle = Float.MAX_VALUE
+    // Rep Metrics
+    private var repMinKneeAngle = 180f
     private var repMaxForwardLean = 0f
-    private var repMaxKneeValgus = 0f
+    private var repMaxValgusRatio = 0f
     private var lastFormScore = 100f
 
     companion object {
-        // Stricter stability requirements to prevent false reps
-        private const val MIN_FRAMES_FOR_STABILITY = 6  // ~200ms at 30fps
-        private const val MIN_REP_DURATION_MS = 1200L   // Minimum 1.2 seconds per rep
-        private const val MIN_FRAMES_AT_TOP = 3         // Must hold standing position
+        private const val KNEE_BOTTOM_THRESHOLD = 105f // Parallel is roughly 90-105°
+        private const val KNEE_LOCKOUT_THRESHOLD = 165f
+        private const val FORWARD_LEAN_LIMIT = 45f    // Degrees of torso tilt
+        private const val VALGUS_THRESHOLD = 0.88f    // Knee width / Ankle width
 
-        private const val BOTTOM_ENTRY_ANGLE = 110f
-        private const val BOTTOM_EXIT_ANGLE = 130f
-        private const val TOP_ANGLE_THRESHOLD = 150f    // Minimum angle at top to count
-
-        private const val GOOD_DEPTH_ANGLE = 110f
-        private const val DEPTH_THRESHOLD_ANGLE = 110f  // Threshold for depth diagnostics
-        private const val FORWARD_LEAN_MAX = 45f
-        private const val KNEE_VALGUS_THRESHOLD = 0.04f
-
-        private const val DEPTH_PENALTY_WEIGHT = 35f
-        private const val FORWARD_LEAN_PENALTY_WEIGHT = 25f
-        private const val KNEE_VALGUS_PENALTY_WEIGHT = 20f
-    }
-
-    override fun analyzeFeedback(pose: PoseDetectionResult.Success): String {
-        val leftHip = pose.getLandmark(PoseLandmarks.LEFT_HIP)
-        val rightHip = pose.getLandmark(PoseLandmarks.RIGHT_HIP)
-        val leftKnee = pose.getLandmark(PoseLandmarks.LEFT_KNEE)
-        val rightKnee = pose.getLandmark(PoseLandmarks.RIGHT_KNEE)
-        val leftAnkle = pose.getLandmark(PoseLandmarks.LEFT_ANKLE)
-        val rightAnkle = pose.getLandmark(PoseLandmarks.RIGHT_ANKLE)
-
-        if (leftHip == null || rightHip == null || leftKnee == null || rightKnee == null) {
-            return "Move into frame"
-        }
-
-        if (leftAnkle != null && rightAnkle != null) {
-            val leftValgus = leftAnkle.x() - leftKnee.x()
-            val rightValgus = rightKnee.x() - rightAnkle.x()
-            if (maxOf(leftValgus, rightValgus) > KNEE_VALGUS_THRESHOLD) {
-                return "Push knees out"
-            }
-        }
-
-        if (usingAngleMode) {
-            return when {
-                lastSmoothedKneeAngle > 150f -> "Start your squat"
-                lastSmoothedKneeAngle > BOTTOM_EXIT_ANGLE -> "Go lower"
-                lastSmoothedKneeAngle <= GOOD_DEPTH_ANGLE -> "Good depth!"
-                else -> "Almost there"
-            }
-        }
-
-        val avgHipY = (leftHip.y() + rightHip.y()) / 2
-        val avgKneeY = (leftKnee.y() + rightKnee.y()) / 2
-        return if (avgHipY > avgKneeY) "Good depth!" else "Go lower"
+        private const val MIN_REP_DURATION = 1100L
+        private const val STABILITY_REQUIRED = 3
     }
 
     override fun updateRepCount(pose: PoseDetectionResult.Success): Boolean {
-        val leftHip = pose.getLandmark(PoseLandmarks.LEFT_HIP)
-        val rightHip = pose.getLandmark(PoseLandmarks.RIGHT_HIP)
-        val leftKnee = pose.getLandmark(PoseLandmarks.LEFT_KNEE)
-        val rightKnee = pose.getLandmark(PoseLandmarks.RIGHT_KNEE)
-        val leftAnkle = pose.getLandmark(PoseLandmarks.LEFT_ANKLE)
-        val rightAnkle = pose.getLandmark(PoseLandmarks.RIGHT_ANKLE)
-        val leftShoulder = pose.getLandmark(PoseLandmarks.LEFT_SHOULDER)
-        val rightShoulder = pose.getLandmark(PoseLandmarks.RIGHT_SHOULDER)
+        // 1. Calculate Core Angles (Bilateral averages help with camera angle noise)
+        val kneeAngle = getBilateralAngle(pose, 23, 25, 27) // Hip, Knee, Ankle
+        val hipAngle = getBilateralAngle(pose, 11, 23, 25)  // Shoulder, Hip, Knee
 
-        if (leftHip == null || rightHip == null || leftKnee == null || rightKnee == null) {
-            bottomFrameCount = 0
-            return false
-        }
+        if (kneeAngle == null || hipAngle == null) return false
 
-        val canUseAngle = leftAnkle != null || rightAnkle != null
-        usingAngleMode = canUseAngle
+        val smoothedKnee = kneeSmoother.add(kneeAngle)
+        val smoothedHip = hipSmoother.add(hipAngle)
 
-        val isAtBottomPosition: Boolean
-        val isAtTopPosition: Boolean
+        // 2. Track Form during the rep
+        val forwardLean = abs(180f - smoothedHip)
+        val valgusRatio = calculateValgusRatio(pose)
 
-        if (canUseAngle) {
-            val kneeAngle = BilateralAngleCalculator.calculateBilateralAngle(
-                leftHip, leftKnee, leftAnkle,
-                rightHip, rightKnee, rightAnkle
-            )
+        if (smoothedKnee < repMinKneeAngle) repMinKneeAngle = smoothedKnee
+        if (forwardLean > repMaxForwardLean) repMaxForwardLean = forwardLean
+        if (valgusRatio < repMaxValgusRatio || repMaxValgusRatio == 0f) repMaxValgusRatio = valgusRatio
 
-            if (kneeAngle != null) {
-                val smoothedKnee = kneeAngleSmoother.add(kneeAngle)
-                lastSmoothedKneeAngle = smoothedKnee
-
-                if (smoothedKnee < repMinKneeAngle) repMinKneeAngle = smoothedKnee
-            }
-
-            val hipAngle = BilateralAngleCalculator.calculateBilateralAngle(
-                leftShoulder, leftHip, leftKnee,
-                rightShoulder, rightHip, rightKnee
-            )
-
-            if (hipAngle != null) {
-                val smoothedHip = hipAngleSmoother.add(hipAngle)
-                lastSmoothedHipAngle = smoothedHip
-                val forwardLean = (90f - smoothedHip).coerceAtLeast(0f)
-                if (forwardLean > repMaxForwardLean) repMaxForwardLean = forwardLean
-            }
-
-            if (leftAnkle != null) {
-                val leftValgus = leftAnkle.x() - leftKnee.x()
-                if (leftValgus > repMaxKneeValgus) repMaxKneeValgus = leftValgus
-            }
-            if (rightAnkle != null) {
-                val rightValgus = rightKnee.x() - rightAnkle.x()
-                if (rightValgus > repMaxKneeValgus) repMaxKneeValgus = rightValgus
-            }
-
-            isAtBottomPosition = lastSmoothedKneeAngle < BOTTOM_ENTRY_ANGLE
-            isAtTopPosition = lastSmoothedKneeAngle > TOP_ANGLE_THRESHOLD
-        } else {
-            val avgHipY = (leftHip.y() + rightHip.y()) / 2
-            val avgKneeY = (leftKnee.y() + rightKnee.y()) / 2
-            isAtBottomPosition = avgHipY > avgKneeY
-            isAtTopPosition = avgHipY < avgKneeY - 0.05f  // Stricter top position requirement
-        }
-
-        if (isAtBottomPosition) {
-            bottomFrameCount++
-            topFrameCount = 0  // Reset top counter when at bottom
-            if (bottomFrameCount >= MIN_FRAMES_FOR_STABILITY && !isAtBottom) {
-                isAtBottom = true
-            }
-        } else if (isAtTopPosition && isAtBottom) {
-            // At top position - increment top frame counter
-            topFrameCount++
-            bottomFrameCount = 0
-
-            // Only count rep if held at top for required frames AND minimum duration met
-            if (topFrameCount >= MIN_FRAMES_AT_TOP) {
-                val currentTime = System.currentTimeMillis()
-                if (currentTime - lastRepTime >= MIN_REP_DURATION_MS) {
-                    isAtBottom = false
-                    topFrameCount = 0
-                    lastRepTime = currentTime
-                    lastFormScore = calculateFormScore()
-                    resetRepTracking()
-                    return true
-                }
-            }
-        } else {
-            // In transition zone - reset counters
-            bottomFrameCount = 0
-            if (!isAtTopPosition) {
-                topFrameCount = 0
-            }
-        }
-
-        return false
+        return handleStateMachine(smoothedKnee)
     }
 
-    override fun hadGoodForm(): Boolean = lastFormScore >= 60f
+    private fun handleStateMachine(knee: Float): Boolean {
+        return when (currentState) {
+            State.STANDING -> {
+                if (knee < KNEE_LOCKOUT_THRESHOLD - 10f) currentState = State.DESCENT
+                false
+            }
+            State.DESCENT -> {
+                if (knee < KNEE_BOTTOM_THRESHOLD) {
+                    frameStabilityCount++
+                    if (frameStabilityCount >= STABILITY_REQUIRED) {
+                        currentState = State.BOTTOM
+                        frameStabilityCount = 0
+                    }
+                }
+                false
+            }
+            State.BOTTOM -> {
+                if (knee > KNEE_BOTTOM_THRESHOLD + 15f) currentState = State.ASCENT
+                false
+            }
+            State.ASCENT -> {
+                if (knee > KNEE_LOCKOUT_THRESHOLD) {
+                    val now = System.currentTimeMillis()
+                    if (now - lastRepTime > MIN_REP_DURATION) {
+                        completeRep(now)
+                        return true
+                    }
+                }
+                false
+            }
+        }
+    }
 
-    override fun formScore(): Float = lastFormScore
+    private fun calculateValgusRatio(pose: PoseDetectionResult.Success): Float {
+        val lKnee = pose.getLandmark(25); val rKnee = pose.getLandmark(26)
+        val lAnkle = pose.getLandmark(27); val rAnkle = pose.getLandmark(28)
+
+        if (lKnee == null || rKnee == null || lAnkle == null || rAnkle == null) return 1.0f
+
+        val kneeWidth = abs(lKnee.x() - rKnee.x())
+        val ankleWidth = abs(lAnkle.x() - rAnkle.x())
+
+        return if (ankleWidth > 0.05f) kneeWidth / ankleWidth else 1.0f
+    }
 
     private fun calculateFormScore(): Float {
         var score = 100f
 
-        if (usingAngleMode) {
-            if (repMinKneeAngle > GOOD_DEPTH_ANGLE) {
-                val depthDeviation = ((repMinKneeAngle - GOOD_DEPTH_ANGLE) / 40f).coerceIn(0f, 1f)
-                score -= depthDeviation * DEPTH_PENALTY_WEIGHT
-            }
+        // Penalty: Depth (Range of Motion)
+        if (repMinKneeAngle > 110f) score -= 35f
 
-            if (repMaxForwardLean > FORWARD_LEAN_MAX) {
-                val leanDeviation = ((repMaxForwardLean - FORWARD_LEAN_MAX) / 30f).coerceIn(0f, 1f)
-                score -= leanDeviation * FORWARD_LEAN_PENALTY_WEIGHT
-            }
+        // Penalty: Knee Valgus (Safety)
+        if (repMaxValgusRatio < VALGUS_THRESHOLD) score -= 25f
 
-            if (repMaxKneeValgus > KNEE_VALGUS_THRESHOLD) {
-                val valgusDeviation = ((repMaxKneeValgus - KNEE_VALGUS_THRESHOLD) / 0.06f).coerceIn(0f, 1f)
-                score -= valgusDeviation * KNEE_VALGUS_PENALTY_WEIGHT
-            }
-        }
+        // Penalty: Excessive Forward Lean (Good Morning Squat)
+        if (repMaxForwardLean > FORWARD_LEAN_LIMIT) score -= 20f
 
         return score.coerceIn(0f, 100f)
     }
 
-    private fun resetRepTracking() {
-        repMinKneeAngle = Float.MAX_VALUE
-        repMaxForwardLean = 0f
-        repMaxKneeValgus = 0f
+    override fun analyzeFeedback(pose: PoseDetectionResult.Success): String {
+        val knee = kneeSmoother.lastValue
+        val hip = hipSmoother.lastValue
+        val valgus = calculateValgusRatio(pose)
+
+        return when {
+            valgus < VALGUS_THRESHOLD -> "Push your knees out!"
+            abs(180f - hip) > FORWARD_LEAN_LIMIT -> "Keep your chest up!"
+            knee > KNEE_BOTTOM_THRESHOLD && currentState == State.DESCENT -> "Go a bit lower"
+            knee > KNEE_LOCKOUT_THRESHOLD -> "Good stand! Start next rep."
+            else -> "Drive through your mid-foot"
+        }
     }
 
     override fun detectMovementPhase(pose: PoseDetectionResult.Success): MovementPhase {
-        val landmarks = pose.landmarks
-        val leftHip = landmarks.getOrNull(23)
-        val leftKnee = landmarks.getOrNull(25)
-        val leftAnkle = landmarks.getOrNull(27)
-        val rightHip = landmarks.getOrNull(24)
-        val rightKnee = landmarks.getOrNull(26)
-        val rightAnkle = landmarks.getOrNull(27)
-
-        // Use bilateral angle calculation for knee angle
-        val kneeAngle = BilateralAngleCalculator.calculateBilateralAngle(
-            leftHip, leftKnee, leftAnkle,
-            rightHip, rightKnee, rightAnkle
-        ) ?: return MovementPhase.TRANSITION
-
-        return when {
-            // Lockout/Standing position (knee angle > 160°)
-            kneeAngle >= 160f -> MovementPhase.LOCKOUT
-
-            // Bottom position (knee angle < 90° - deep squat)
-            kneeAngle < 90f -> MovementPhase.BOTTOM
-
-            // Descent phase (knee angle 120-160°, going down)
-            kneeAngle in 120f..160f && !isAtBottom -> MovementPhase.DESCENT
-
-            // Ascent phase (knee angle 90-150°, coming up)
-            kneeAngle in 90f..150f && isAtBottom -> MovementPhase.ASCENT
-
-            // Transitional positions
-            else -> MovementPhase.TRANSITION
+        return when (currentState) {
+            State.STANDING -> MovementPhase.LOCKOUT
+            State.DESCENT -> MovementPhase.DESCENT
+            State.BOTTOM -> MovementPhase.BOTTOM
+            State.ASCENT -> MovementPhase.ASCENT
         }
     }
 
     override fun getFormDiagnostics(pose: PoseDetectionResult.Success): List<FormDiagnostic> {
-        val diagnostics = mutableListOf<FormDiagnostic>()
-        val landmarks = pose.landmarks
+        val knee = kneeSmoother.lastValue
+        val valgus = calculateValgusRatio(pose)
 
-        val leftHip = landmarks.getOrNull(23)
-        val leftKnee = landmarks.getOrNull(25)
-        val leftAnkle = landmarks.getOrNull(27)
-        val rightHip = landmarks.getOrNull(24)
-        val rightKnee = landmarks.getOrNull(26)
-        val rightAnkle = landmarks.getOrNull(28)
-
-        // 1. Check squat depth (always report knee angle)
-        val kneeAngle = BilateralAngleCalculator.calculateBilateralAngle(
-            leftHip, leftKnee, leftAnkle,
-            rightHip, rightKnee, rightAnkle
+        return listOf(
+            FormDiagnostic(
+                issue = if (knee < KNEE_BOTTOM_THRESHOLD + 5f) "Good Depth" else "Shallow Depth",
+                angle = "Knee Angle",
+                measured = knee,
+                expected = "< 105°",
+                severity = if (knee < KNEE_BOTTOM_THRESHOLD + 5f) FormIssueSeverity.GOOD else FormIssueSeverity.MODERATE
+            ),
+            FormDiagnostic(
+                issue = if (valgus < VALGUS_THRESHOLD) "Knees Caving" else "Good Knee Tracking",
+                angle = "Valgus Ratio",
+                measured = valgus * 100,
+                expected = "> 88%",
+                severity = if (valgus < VALGUS_THRESHOLD) FormIssueSeverity.CRITICAL else FormIssueSeverity.GOOD
+            )
         )
+    }
 
-        kneeAngle?.let { angle ->
-            if (angle > DEPTH_THRESHOLD_ANGLE && isAtBottom) {
-                diagnostics.add(
-                    FormDiagnostic(
-                        issue = "Shallow depth - not reaching parallel",
-                        angle = "Knee angle",
-                        measured = angle,
-                        expected = "< ${DEPTH_THRESHOLD_ANGLE.toInt()}° (parallel or below)",
-                        severity = if (angle > 120f) FormIssueSeverity.CRITICAL else FormIssueSeverity.MODERATE
-                    )
-                )
-            } else if (isAtBottom) {
-                // Good depth - still report the angle
-                diagnostics.add(
-                    FormDiagnostic(
-                        issue = "Good depth achieved",
-                        angle = "Knee angle",
-                        measured = angle,
-                        expected = "< ${DEPTH_THRESHOLD_ANGLE.toInt()}° ✓",
-                        severity = FormIssueSeverity.GOOD
-                    )
-                )
-            }
-        }
+    private fun completeRep(time: Long) {
+        lastFormScore = calculateFormScore()
+        lastRepTime = time
+        resetRepMetrics()
+        currentState = State.STANDING
+    }
 
-        // 2. Check knee valgus (knees caving in) - always report knee tracking
-        if (leftKnee != null && rightKnee != null && leftAnkle != null && rightAnkle != null) {
-            val kneeWidth = kotlin.math.abs(leftKnee.x() - rightKnee.x())
-            val ankleWidth = kotlin.math.abs(leftAnkle.x() - rightAnkle.x())
-
-            if (ankleWidth > 0.01f) {
-                val kneeValgusRatio = kneeWidth / ankleWidth
-                if (kneeValgusRatio < 0.85f) {
-                    diagnostics.add(
-                        FormDiagnostic(
-                            issue = "Knees caving inward (valgus)",
-                            angle = "Knee tracking",
-                            measured = kneeValgusRatio * 100f,
-                            expected = "≥ 85% (knees over toes)",
-                            severity = FormIssueSeverity.CRITICAL
-                        )
-                    )
-                } else {
-                    diagnostics.add(
-                        FormDiagnostic(
-                            issue = "Good knee tracking",
-                            angle = "Knee tracking",
-                            measured = kneeValgusRatio * 100f,
-                            expected = "≥ 85% ✓",
-                            severity = FormIssueSeverity.GOOD
-                        )
-                    )
-                }
-            }
-        }
-
-        // 3. Check forward lean - always report torso angle
-        if (leftHip != null && leftKnee != null && leftAnkle != null) {
-            val hipKneeAngle = PoseAnalyzer.calculateAngle(leftAnkle, leftKnee, leftHip)
-            if (hipKneeAngle > 100f) {
-                diagnostics.add(
-                    FormDiagnostic(
-                        issue = "Excessive forward lean",
-                        angle = "Torso angle",
-                        measured = hipKneeAngle,
-                        expected = "< 100° (upright torso)",
-                        severity = FormIssueSeverity.MODERATE
-                    )
-                )
-            } else {
-                diagnostics.add(
-                    FormDiagnostic(
-                        issue = "Good torso position",
-                        angle = "Torso angle",
-                        measured = hipKneeAngle,
-                        expected = "< 100° ✓",
-                        severity = FormIssueSeverity.GOOD
-                    )
-                )
-            }
-        }
-
-        return diagnostics
+    private fun resetRepMetrics() {
+        repMinKneeAngle = 180f
+        repMaxForwardLean = 0f
+        repMaxValgusRatio = 1.0f
     }
 
     override fun reset() {
-        isAtBottom = false
-        bottomFrameCount = 0
-        topFrameCount = 0
+        currentState = State.STANDING
         lastRepTime = 0L
-        lastFormScore = 100f
-        usingAngleMode = false
-        lastSmoothedKneeAngle = 180f
-        lastSmoothedHipAngle = 90f
-        kneeAngleSmoother.reset()
-        hipAngleSmoother.reset()
-        resetRepTracking()
+        resetRepMetrics()
+        kneeSmoother.reset()
+        hipSmoother.reset()
     }
+
+    private fun getBilateralAngle(pose: PoseDetectionResult.Success, a: Int, b: Int, c: Int): Float? {
+        val left = AngleCalculator.calculateAngle(pose.getLandmark(a), pose.getLandmark(b), pose.getLandmark(c))
+        val right = AngleCalculator.calculateAngle(pose.getLandmark(a + 1), pose.getLandmark(b + 1), pose.getLandmark(c + 1))
+        return if (left != null && right != null) (left + right) / 2f else left ?: right
+    }
+
+    override fun formScore(): Float = lastFormScore
+    override fun hadGoodForm(): Boolean = lastFormScore >= 70f
 }

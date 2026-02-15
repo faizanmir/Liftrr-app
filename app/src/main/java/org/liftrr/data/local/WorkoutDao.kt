@@ -32,6 +32,9 @@ interface WorkoutDao {
     @Query("SELECT * FROM workout_sessions WHERE sessionId = :sessionId")
     suspend fun getWorkoutById(sessionId: String): WorkoutSessionEntity?
 
+    @Query("SELECT COUNT(*) FROM workout_sessions WHERE userId = :userId AND isDeleted = 0")
+    suspend fun getWorkoutCount(userId: String): Int
+
     @Query("SELECT * FROM workout_sessions WHERE isDeleted = 1 ORDER BY deletedAt DESC")
     suspend fun getDeletedWorkouts(): List<WorkoutSessionEntity>
 

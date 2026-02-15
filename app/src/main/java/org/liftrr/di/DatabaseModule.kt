@@ -27,10 +27,7 @@ object DatabaseModule {
             LiftrrDb::class.java,
             "liftrr-db"
         )
-            .addMigrations(
-                DatabaseMigrations.MIGRATION_6_7,
-                DatabaseMigrations.MIGRATION_7_8
-            )
+            .addMigrations(*DatabaseMigrations.ALL_MIGRATIONS)
             .fallbackToDestructiveMigration(false)
             .build()
     }
@@ -43,6 +40,16 @@ object DatabaseModule {
     @Provides
     fun provideWorkoutDao(database: LiftrrDb): org.liftrr.data.local.WorkoutDao {
         return database.workoutDao()
+    }
+
+    @Provides
+    fun provideSyncQueueDao(database: LiftrrDb): org.liftrr.data.local.SyncQueueDao {
+        return database.syncQueueDao()
+    }
+
+    @Provides
+    fun provideUserPromptDao(database: LiftrrDb): org.liftrr.data.local.UserPromptDao {
+        return database.userPromptDao()
     }
 }
 

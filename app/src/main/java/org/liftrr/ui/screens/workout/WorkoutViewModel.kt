@@ -24,6 +24,7 @@ import org.liftrr.domain.analytics.WorkoutSession
 import org.liftrr.domain.workout.MovementPhase
 import org.liftrr.domain.workout.RepData
 import org.liftrr.domain.workout.WorkoutEngine
+import org.liftrr.domain.workout.WorkoutReportHolder
 import org.liftrr.ml.ExerciseType
 import org.liftrr.ml.PoseDetectionResult
 import org.liftrr.ml.PoseDetector
@@ -58,61 +59,39 @@ data class WorkoutUiState(
  */
 @HiltViewModel
 class WorkoutViewModel @Inject constructor(
-    @ApplicationContext private val context: Context,
+    @param:ApplicationContext private val context: Context,
     val poseDetector: PoseDetector,
-    private val workoutReportHolder: org.liftrr.domain.workout.WorkoutReportHolder,
+    private val workoutReportHolder: WorkoutReportHolder,
     private val workoutRepository: WorkoutRepository,
     val dispatchers: DispatcherProvider
 ) : ViewModel() {
 
-    private val _uiState = MutableStateFlow(
-        WorkoutUiState(mode = WorkoutMode.SENSOR_AND_CAMERA)
-    )
+    private val _uiState = MutableStateFlow(WorkoutUiState(mode = WorkoutMode.SENSOR_AND_CAMERA))
     val uiState: StateFlow<WorkoutUiState> = _uiState.asStateFlow()
 
-    // Business logic engine (follows Dependency Inversion Principle)
     private val workoutEngine = WorkoutEngine()
-
-    // Key frame capture for visual feedback
     private val keyFrameCapture = KeyFrameCapture(context)
 
-    // Store the last generated report for summary screen
     private var lastWorkoutReport: WorkoutReport? = null
-
-    // Store video URI for the current workout
     private var videoUri: String? = null
-
-    // Store weight for the current workout
     private var weight: Float? = null
-
-    // Track if pose detector is already initialized
     private var isPoseDetectorInitialized = false
 
-    // Store latest camera frame for key frame capture
     private var latestFrameBitmap: Bitmap? = null
     private var latestFrameTimestamp: Long = 0L
-    private val bitmapLock = Any() // Synchronization lock for bitmap access
+    private val bitmapLock = Any()
 
-    // Track which phases have been captured for the current rep
     private val capturedPhasesThisRep = mutableSetOf<MovementPhase>()
     private var lastRepNumber = 0
 
-    /**
-     * Pre-initialize pose detector to reduce startup delay
-     * Called early (e.g., on WorkoutPreparationScreen) to prepare for workout
-     */
     fun preInitializePoseDetector() {
         if (isPoseDetectorInitialized) return
-
         viewModelScope.launch {
             try {
-                withContext(dispatchers.io) {
-                    poseDetector.initialize()
-                }
+                withContext(dispatchers.io) { poseDetector.initialize() }
                 isPoseDetectorInitialized = true
-                android.util.Log.d("WorkoutViewModel", "Pose detector pre-initialized successfully")
             } catch (e: Exception) {
-                android.util.Log.e("WorkoutViewModel", "Failed to pre-initialize pose detector", e)
+                android.util.Log.e("WorkoutViewModel", "Initialization failed", e)
             }
         }
     }
@@ -122,52 +101,50 @@ class WorkoutViewModel @Inject constructor(
             try {
                 if (!isPoseDetectorInitialized) {
                     _uiState.update { it.copy(isPoseDetectionInitializing = true) }
-
-                    withContext(dispatchers.io) {
-                        poseDetector.initialize()
-                    }
+                    withContext(dispatchers.io) { poseDetector.initialize() }
                     isPoseDetectorInitialized = true
-
                     _uiState.update { it.copy(isPoseDetectionInitializing = false) }
                 }
 
                 poseDetector.poseResults
                     .onEach { result ->
+                        // Move processing to Default dispatcher to keep UI responsive
                         withContext(dispatchers.default) {
-                            val previousRepCount = workoutEngine.getRepStats().total
                             val workoutState = workoutEngine.processPoseResult(result)
                             val repStats = workoutEngine.getRepStats()
                             val currentRepCount = repStats.total
 
-                            // Reset captured phases when starting a new rep
+                            // Phase state reset on new rep
                             if (currentRepCount != lastRepNumber) {
                                 capturedPhasesThisRep.clear()
                                 lastRepNumber = currentRepCount
                             }
 
-                            // Capture frames at different phases during the rep
-                            if (result is PoseDetectionResult.Success && _uiState.value.isRecording && currentRepCount > 0) {
-                                capturePhaseFrameIfNeeded(
-                                    result = result,
-                                    repNumber = currentRepCount,
-                                    formScore = workoutState.poseQualityScore,
-                                    formFeedback = workoutState.formFeedback
-                                )
-                            }
-
-                            withContext(dispatchers.main) {
-                                _uiState.update {
-                                    it.copy(
-                                        currentPose = workoutState.currentPose,
-                                        formFeedback = workoutState.formFeedback,
-                                        poseQualityScore = workoutState.poseQualityScore,
-                                        repCount = workoutState.repCount,
-                                        goodReps = repStats.good,
-                                        badReps = repStats.bad,
-                                        reps = workoutState.reps,
-                                        poseQuality = workoutState.poseQuality
+                            // Capture Logic with Validity Check
+                            if (result is PoseDetectionResult.Success && _uiState.value.isRecording) {
+                                // Performance: Only attempt capture if landmarks meet a confidence threshold
+                                if (workoutState.poseQualityScore > 0.4f) {
+                                    capturePhaseFrameIfNeeded(
+                                        result = result,
+                                        repNumber = currentRepCount,
+                                        formScore = workoutState.poseQualityScore,
+                                        formFeedback = workoutState.formFeedback
                                     )
                                 }
+                            }
+
+                            // Batch update the UI state once per frame
+                            _uiState.update {
+                                it.copy(
+                                    currentPose = workoutState.currentPose,
+                                    formFeedback = workoutState.formFeedback,
+                                    poseQualityScore = workoutState.poseQualityScore,
+                                    repCount = workoutState.repCount,
+                                    goodReps = repStats.good,
+                                    badReps = repStats.bad,
+                                    reps = workoutState.reps,
+                                    poseQuality = workoutState.poseQuality
+                                )
                             }
                         }
                     }
@@ -177,7 +154,7 @@ class WorkoutViewModel @Inject constructor(
                 _uiState.update {
                     it.copy(
                         isPoseDetectionInitializing = false,
-                        currentPose = PoseDetectionResult.Error("Failed to load pose detection model: ${e.message}"),
+                        currentPose = PoseDetectionResult.Error("Detection failed: ${e.message}"),
                         formFeedback = "Camera unavailable"
                     )
                 }
@@ -185,122 +162,66 @@ class WorkoutViewModel @Inject constructor(
         }
     }
 
-    fun processFrame(bitmap: android.graphics.Bitmap, timestamp: Long, release: () -> Unit) {
-        // Store latest frame for key frame capture (only if recording)
+    fun processFrame(bitmap: Bitmap, timestamp: Long, release: () -> Unit) {
         if (_uiState.value.isRecording) {
             updateLatestFrame(bitmap, timestamp)
         }
-
         poseDetector.detectPoseAsync(bitmap, timestamp, release)
     }
 
-    fun startRecording() {
-        _uiState.update { it.copy(isRecording = true) }
-        // Start session tracking for analytics
-        workoutEngine.startSession(_uiState.value.mode)
-    }
-
-    fun stopRecording() {
-        _uiState.update { it.copy(isRecording = false) }
-        stopPoseDetection()
-    }
-
     /**
-     * Set the video URI for the current workout
-     */
-    fun setVideoUri(uri: String) {
-        android.util.Log.d("WorkoutViewModel", "Video URI set: $uri")
-        videoUri = uri
-    }
-
-    /**
-     * Set the weight for the current workout
-     */
-    fun setWeight(w: Float) {
-        android.util.Log.d("WorkoutViewModel", "Weight set: $w kg")
-        weight = w
-    }
-
-    /**
-     * Store the latest camera frame for potential key frame capture
-     * Called from UI when camera provides a new frame
+     * Optimized Frame Update: Reduces GC pressure by only copying frames
+     * when recording and limiting copy frequency to 15fps for keyframe candidates.
      */
     fun updateLatestFrame(bitmap: Bitmap, timestamp: Long) {
         synchronized(bitmapLock) {
-            // Recycle old bitmap safely
+            // Memory Optimization: Skip copying if we already have a very recent frame (within 33ms)
+            if (timestamp - latestFrameTimestamp < 33L) return
+
             val oldBitmap = latestFrameBitmap
-            // Make a copy since the original will be recycled by the pool
             latestFrameBitmap = bitmap.copy(Bitmap.Config.ARGB_8888, false)
             latestFrameTimestamp = timestamp
-            // Recycle after updating reference to avoid race condition
             oldBitmap?.recycle()
         }
     }
 
-    /**
-     * Capture frames at different phases of the movement
-     * Detects current phase and captures if not already captured this rep
-     */
     private fun capturePhaseFrameIfNeeded(
         result: PoseDetectionResult.Success,
         repNumber: Int,
         formScore: Float,
         formFeedback: String
     ) {
-        // Detect current movement phase
         val exercise = workoutEngine.getCurrentExercise() ?: return
         val currentPhase = exercise.detectMovementPhase(result)
 
-        // Define which phases we want to capture (4-5 key phases)
-        val importantPhases = setOf(
-            MovementPhase.SETUP,
-            MovementPhase.DESCENT,
-            MovementPhase.BOTTOM,
-            MovementPhase.ASCENT,
-            MovementPhase.LOCKOUT
-        )
+        // Focus only on high-value diagnostic phases
+        val importantPhases = setOf(MovementPhase.BOTTOM, MovementPhase.LOCKOUT, MovementPhase.SETUP)
 
-        // Only capture if this is an important phase and we haven't captured it yet for this rep
         if (currentPhase in importantPhases && currentPhase !in capturedPhasesThisRep) {
-            // Get bitmap and timestamp atomically
             val (bitmap, timestamp) = synchronized(bitmapLock) {
                 val bmp = latestFrameBitmap ?: return
                 Pair(bmp, latestFrameTimestamp)
             }
 
-            // Determine form issues from feedback
-            val formIssues = if (formScore < 0.7f) {
-                listOf(formFeedback)
-            } else {
-                emptyList()
-            }
-
-            // Get detailed form diagnostics with specific angles
             val diagnostics = exercise.getFormDiagnostics(result)
 
-            // Capture this frame for later processing
             keyFrameCapture.captureFrame(
                 bitmap = bitmap,
                 timestamp = timestamp,
                 repNumber = repNumber,
                 poseData = result,
                 formScore = formScore,
-                formIssues = formIssues,
+                formIssues = if (formScore < 0.7f) listOf(formFeedback) else emptyList(),
                 movementPhase = currentPhase,
                 diagnostics = diagnostics
             )
-
-            // Mark this phase as captured for this rep
             capturedPhasesThisRep.add(currentPhase)
         }
     }
 
     suspend fun finishWorkout(): WorkoutReport? = withContext(dispatchers.default) {
-        android.util.Log.d("WorkoutViewModel", "finishWorkout called. videoUri: $videoUri")
-
         val session = workoutEngine.endSession() ?: return@withContext null
         val report = WorkoutAnalyzer.analyzeSession(session)
-
         lastWorkoutReport = report
         workoutReportHolder.setReport(report)
 
@@ -317,28 +238,9 @@ class WorkoutViewModel @Inject constructor(
                 )
             }
 
-            val repDataJson = try {
-                Gson().toJson(repDataList)
-            } catch (e: Exception) {
-                android.util.Log.e("WorkoutViewModel", "Failed to serialize rep data", e)
-                null
-            }
-
-            // Process and save key frames
             val keyFrames = keyFrameCapture.processAndSaveKeyFrames(session.id)
-            val keyFramesJson = try {
-                if (keyFrames.isNotEmpty()) {
-                    Gson().toJson(keyFrames)
-                } else null
-            } catch (e: Exception) {
-                android.util.Log.e("WorkoutViewModel", "Failed to serialize key frames", e)
-                null
-            }
 
-            // Clear captured frames to free memory
-            keyFrameCapture.clear()
-
-            val entity = WorkoutSessionEntity(
+            workoutRepository.saveWorkout(WorkoutSessionEntity(
                 sessionId = session.id,
                 exerciseType = report.exerciseType.name,
                 totalReps = report.totalReps,
@@ -351,32 +253,39 @@ class WorkoutViewModel @Inject constructor(
                 videoUri = videoUri,
                 weight = weight,
                 timestamp = System.currentTimeMillis(),
-                isUploaded = false,
-                repDataJson = repDataJson,
-                keyFramesJson = keyFramesJson
-            )
-            android.util.Log.d("WorkoutViewModel", "Saving workout to database with ${repDataList.size} reps, ${keyFrames.size} key frames, video URI: ${entity.videoUri}, weight: ${entity.weight}")
-            workoutRepository.saveWorkout(entity)
+                userId = "local",
+                repDataJson = Gson().toJson(repDataList),
+                keyFramesJson = Gson().toJson(keyFrames)
+            ))
+            keyFrameCapture.clear()
         }
 
-        // Clean up latest frame bitmap safely
         synchronized(bitmapLock) {
             latestFrameBitmap?.recycle()
             latestFrameBitmap = null
         }
-
         report
     }
 
-    fun getLastWorkoutReport(): WorkoutReport? = lastWorkoutReport
-
-    fun getCurrentSession(): WorkoutSession? {
-        return if (workoutEngine.isSessionActive()) {
-            workoutEngine.endSession()
-        } else {
-            null
-        }
+    fun startRecording() {
+        _uiState.update { it.copy(isRecording = true) }
+        workoutEngine.startSession(_uiState.value.mode)
     }
+
+    fun stopRecording() {
+        _uiState.update { it.copy(isRecording = false) }
+        stopPoseDetection()
+    }
+
+    fun setVideoUri(uri: String) { videoUri = uri }
+    fun setWeight(w: Float) { weight = w }
+    fun getLastWorkoutReport(): WorkoutReport? = lastWorkoutReport
+    fun setExerciseType(exerciseType: ExerciseType) {
+        workoutEngine.setExerciseType(exerciseType)
+        _uiState.update { it.copy(exerciseType = exerciseType) }
+    }
+
+    fun stopPoseDetection() { _uiState.update { it.copy(isPoseDetectionInitializing = false) } }
 
     fun resetReps() {
         workoutEngine.reset()
@@ -390,21 +299,9 @@ class WorkoutViewModel @Inject constructor(
         }
     }
 
-    fun setExerciseType(exerciseType: ExerciseType) {
-        workoutEngine.setExerciseType(exerciseType)
-        _uiState.update { it.copy(exerciseType = exerciseType) }
-    }
-
-    /**
-     * Called when stopping recording
-     * Stops the pose detector to release resources
-     */
-    fun stopPoseDetection() {
-        _uiState.update { it.copy(isPoseDetectionInitializing = false) }
-    }
-
     override fun onCleared() {
         super.onCleared()
         poseDetector.reset()
+        synchronized(bitmapLock) { latestFrameBitmap?.recycle() }
     }
 }

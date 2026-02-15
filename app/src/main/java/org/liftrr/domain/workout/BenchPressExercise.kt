@@ -1,323 +1,179 @@
 package org.liftrr.domain.workout
 
-import org.liftrr.ml.PoseAnalyzer
 import org.liftrr.ml.PoseDetectionResult
-import org.liftrr.ml.PoseLandmarks
-import kotlin.math.abs
 
 class BenchPressExercise : Exercise {
 
-    private var isAtBottom = false
-    private var bottomFrameCount = 0
-    private var topFrameCount = 0  // Track frames at lockout position
+    enum class State { START, DESCENT, BOTTOM, ASCENT }
+
+    private var currentState = State.START
     private var lastRepTime = 0L
+    private var frameStabilityCount = 0
 
-    private val elbowAngleSmoother = AngleSmoother(3)
+    private val elbowSmoother = AngleSmoother(5)
 
-    private var lastSmoothedElbowAngle = 180f
-
-    private var repMinElbowAngle = Float.MAX_VALUE
-    private var repMaxElbowFlare = 0f
+    // Rep Tracking Metrics
+    private var repMinElbowAngle = 180f
+    private var repMaxFlareAngle = 0f
     private var repMaxLockoutAngle = 0f
     private var lastFormScore = 100f
 
     companion object {
-        // Stricter stability requirements to prevent false reps
-        private const val MIN_FRAMES_FOR_STABILITY = 6  // ~200ms at 30fps
-        private const val MIN_REP_DURATION_MS = 1200L   // Minimum 1.2 seconds per rep
-        private const val MIN_FRAMES_AT_TOP = 3         // Must hold lockout position
+        // Biomechanical Thresholds
+        private const val ELBOW_BOTTOM_LIMIT = 85f   // Bar near chest (90 degrees or less)
+        private const val ELBOW_LOCKOUT_TARGET = 160f
+        private const val FLARE_LIMIT_HIGH = 80f      // Dangerous shoulder stress (T-pose)
+        private const val FLARE_LIMIT_LOW = 30f       // Too tucked
 
-        private const val BOTTOM_ENTRY_ANGLE = 110f
-        private const val BOTTOM_EXIT_ANGLE = 130f
-        private const val TOP_ANGLE_THRESHOLD = 160f    // Stricter lockout requirement
-
-        private const val GOOD_DEPTH_ANGLE = 110f
-        private const val ELBOW_FLARE_MIN = 30f
-        private const val ELBOW_FLARE_MAX = 75f
-        private const val ELBOW_FLARE_THRESHOLD = 0.12f
-
-        private const val DEPTH_PENALTY_WEIGHT = 30f
-        private const val ELBOW_FLARE_PENALTY_WEIGHT = 25f
-        private const val LOCKOUT_PENALTY_WEIGHT = 25f
-    }
-
-    override fun analyzeFeedback(pose: PoseDetectionResult.Success): String {
-        val leftWrist = pose.getLandmark(PoseLandmarks.LEFT_WRIST)
-        val rightWrist = pose.getLandmark(PoseLandmarks.RIGHT_WRIST)
-        val leftElbow = pose.getLandmark(PoseLandmarks.LEFT_ELBOW)
-        val rightElbow = pose.getLandmark(PoseLandmarks.RIGHT_ELBOW)
-        val leftShoulder = pose.getLandmark(PoseLandmarks.LEFT_SHOULDER)
-        val rightShoulder = pose.getLandmark(PoseLandmarks.RIGHT_SHOULDER)
-
-        if (leftWrist == null || rightWrist == null || leftElbow == null ||
-            rightElbow == null || leftShoulder == null || rightShoulder == null
-        ) {
-            return "Position yourself on bench"
-        }
-
-        val shoulderWidth = abs(leftShoulder.x() - rightShoulder.x())
-        val elbowWidth = abs(leftElbow.x() - rightElbow.x())
-        val flareRatio = if (shoulderWidth > 0.01f) elbowWidth / shoulderWidth else 1f
-
-        if (flareRatio > 1.8f && lastSmoothedElbowAngle < BOTTOM_EXIT_ANGLE) {
-            return "Tuck elbows in"
-        }
-
-        if (flareRatio < 0.7f && lastSmoothedElbowAngle < BOTTOM_EXIT_ANGLE) {
-            return "Flare elbows out slightly"
-        }
-
-        return when {
-            lastSmoothedElbowAngle > TOP_ANGLE_THRESHOLD -> "Good lockout!"
-            lastSmoothedElbowAngle > BOTTOM_EXIT_ANGLE -> "Lower the bar"
-            lastSmoothedElbowAngle <= GOOD_DEPTH_ANGLE -> "Touch chest"
-            else -> "Go deeper"
-        }
+        private const val MIN_REP_DURATION = 1100L
+        private const val STABILITY_FRAMES = 3
     }
 
     override fun updateRepCount(pose: PoseDetectionResult.Success): Boolean {
-        val leftWrist = pose.getLandmark(PoseLandmarks.LEFT_WRIST)
-        val leftElbow = pose.getLandmark(PoseLandmarks.LEFT_ELBOW)
-        val rightWrist = pose.getLandmark(PoseLandmarks.RIGHT_WRIST)
-        val rightElbow = pose.getLandmark(PoseLandmarks.RIGHT_ELBOW)
-        val leftShoulder = pose.getLandmark(PoseLandmarks.LEFT_SHOULDER)
-        val rightShoulder = pose.getLandmark(PoseLandmarks.RIGHT_SHOULDER)
+        // 1. Core Angle Calculation
+        val elbowAngle =
+            getBilateralAngle(pose, 11, 13, 15) ?: return false // Shoulder, Elbow, Wrist
 
-        val elbowAngle = BilateralAngleCalculator.calculateBilateralAngle(
-            leftShoulder, leftElbow, leftWrist,
-            rightShoulder, rightElbow, rightWrist
-        )
+        val smoothedElbow = elbowSmoother.add(elbowAngle)
 
-        if (elbowAngle == null) {
-            bottomFrameCount = 0
-            return false
-        }
+        // 2. Calculate Elbow Flare (Angle of humerus relative to torso)
+        val flareAngle = calculateElbowFlare(pose)
 
-        val smoothedElbow = elbowAngleSmoother.add(elbowAngle)
-        lastSmoothedElbowAngle = smoothedElbow
-
+        // Track metrics during the rep journey
         if (smoothedElbow < repMinElbowAngle) repMinElbowAngle = smoothedElbow
+        if (flareAngle > repMaxFlareAngle) repMaxFlareAngle = flareAngle
         if (smoothedElbow > repMaxLockoutAngle) repMaxLockoutAngle = smoothedElbow
 
-        if (leftElbow != null && rightElbow != null && leftShoulder != null && rightShoulder != null) {
-            val shoulderWidth = abs(leftShoulder.x() - rightShoulder.x())
-            val elbowWidth = abs(leftElbow.x() - rightElbow.x())
-            val flareRatio = if (shoulderWidth > 0.01f) elbowWidth / shoulderWidth else 1f
-            if (flareRatio > repMaxElbowFlare) repMaxElbowFlare = flareRatio
-        }
-
-        val isAtBottomPosition = smoothedElbow < BOTTOM_ENTRY_ANGLE
-
-        if (isAtBottomPosition) {
-            bottomFrameCount++
-            topFrameCount = 0  // Reset top counter when at bottom
-            if (bottomFrameCount >= MIN_FRAMES_FOR_STABILITY && !isAtBottom) {
-                isAtBottom = true
-            }
-        } else if (smoothedElbow > TOP_ANGLE_THRESHOLD && isAtBottom) {
-            // At top position - increment top frame counter
-            topFrameCount++
-            bottomFrameCount = 0
-
-            // Only count rep if held at top for required frames AND minimum duration met
-            if (topFrameCount >= MIN_FRAMES_AT_TOP) {
-                val currentTime = System.currentTimeMillis()
-                if (currentTime - lastRepTime >= MIN_REP_DURATION_MS) {
-                    isAtBottom = false
-                    topFrameCount = 0
-                    lastRepTime = currentTime
-                    lastFormScore = calculateFormScore()
-                    resetRepTracking()
-                    return true
-                }
-            }
-        } else {
-            // In transition zone - reset counters
-            if (!isAtBottomPosition) {
-                bottomFrameCount = 0
-            }
-            if (smoothedElbow <= TOP_ANGLE_THRESHOLD) {
-                topFrameCount = 0
-            }
-        }
-
-        return false
+        return handleStateMachine(smoothedElbow)
     }
 
-    override fun hadGoodForm(): Boolean = lastFormScore >= 60f
+    private fun handleStateMachine(elbow: Float): Boolean {
+        return when (currentState) {
+            State.START -> {
+                if (elbow < ELBOW_LOCKOUT_TARGET - 10f) currentState = State.DESCENT
+                false
+            }
+            State.DESCENT -> {
+                if (elbow < ELBOW_BOTTOM_LIMIT) {
+                    frameStabilityCount++
+                    if (frameStabilityCount >= STABILITY_FRAMES) {
+                        currentState = State.BOTTOM
+                        frameStabilityCount = 0
+                    }
+                }
+                false
+            }
+            State.BOTTOM -> {
+                // Hysteresis: Require significant movement before switching to ascent
+                if (elbow > ELBOW_BOTTOM_LIMIT + 15f) currentState = State.ASCENT
+                false
+            }
+            State.ASCENT -> {
+                if (elbow > ELBOW_LOCKOUT_TARGET) {
+                    val now = System.currentTimeMillis()
+                    if (now - lastRepTime > MIN_REP_DURATION) {
+                        completeRep(now)
+                        return true
+                    }
+                }
+                false
+            }
+        }
+    }
 
-    override fun formScore(): Float = lastFormScore
+    private fun calculateElbowFlare(pose: PoseDetectionResult.Success): Float {
+        // Measures angle between Torso (Hip-Shoulder) and Upper Arm (Shoulder-Elbow)
+        val leftFlare = AngleCalculator.calculateAngle(pose.getLandmark(23), pose.getLandmark(11), pose.getLandmark(13))
+        val rightFlare = AngleCalculator.calculateAngle(pose.getLandmark(24), pose.getLandmark(12), pose.getLandmark(14))
+        return if (leftFlare != null && rightFlare != null) (leftFlare + rightFlare) / 2f else leftFlare ?: rightFlare ?: 0f
+    }
 
     private fun calculateFormScore(): Float {
         var score = 100f
 
-        if (repMinElbowAngle > GOOD_DEPTH_ANGLE) {
-            val depthDeviation = ((repMinElbowAngle - GOOD_DEPTH_ANGLE) / 40f).coerceIn(0f, 1f)
-            score -= depthDeviation * DEPTH_PENALTY_WEIGHT
-        }
+        // Penalty 1: Depth / Range of Motion
+        if (repMinElbowAngle > 95f) score -= 35f
 
-        val idealFlare = 1.3f
-        val flareDev = abs(repMaxElbowFlare - idealFlare)
-        if (flareDev > 0.3f) {
-            val flareDeviation = ((flareDev - 0.3f) / 0.8f).coerceIn(0f, 1f)
-            score -= flareDeviation * ELBOW_FLARE_PENALTY_WEIGHT
-        }
+        // Penalty 2: Excessive Flare (Shoulder Safety)
+        if (repMaxFlareAngle > FLARE_LIMIT_HIGH) score -= 25f
 
-        if (repMaxLockoutAngle < TOP_ANGLE_THRESHOLD) {
-            val deviation = ((TOP_ANGLE_THRESHOLD - repMaxLockoutAngle) / 25f).coerceIn(0f, 1f)
-            score -= deviation * LOCKOUT_PENALTY_WEIGHT
-        }
+        // Penalty 3: Soft Lockout
+        if (repMaxLockoutAngle < ELBOW_LOCKOUT_TARGET) score -= 15f
 
         return score.coerceIn(0f, 100f)
     }
 
-    private fun resetRepTracking() {
-        repMinElbowAngle = Float.MAX_VALUE
-        repMaxElbowFlare = 0f
-        repMaxLockoutAngle = 0f
+    override fun analyzeFeedback(pose: PoseDetectionResult.Success): String {
+        val elbow = elbowSmoother.lastValue
+        val flare = calculateElbowFlare(pose)
+
+        return when {
+            flare > FLARE_LIMIT_HIGH -> "Tuck elbows in for shoulder safety!"
+            elbow > ELBOW_LOCKOUT_TARGET -> "Good lockout!"
+            currentState == State.DESCENT && elbow > 105f -> "Bring bar all the way to chest"
+            currentState == State.ASCENT -> "Drive the bar up!"
+            else -> "Controlled movement"
+        }
     }
 
     override fun detectMovementPhase(pose: PoseDetectionResult.Success): MovementPhase {
-        val landmarks = pose.landmarks
-        val leftShoulder = landmarks.getOrNull(11)
-        val leftElbow = landmarks.getOrNull(13)
-        val leftWrist = landmarks.getOrNull(15)
-        val rightShoulder = landmarks.getOrNull(12)
-        val rightElbow = landmarks.getOrNull(14)
-        val rightWrist = landmarks.getOrNull(16)
-
-        // Use bilateral angle calculation for elbow angle
-        val elbowAngle = BilateralAngleCalculator.calculateBilateralAngle(
-            leftShoulder, leftElbow, leftWrist,
-            rightShoulder, rightElbow, rightWrist
-        ) ?: return MovementPhase.TRANSITION
-
+        val elbow = elbowSmoother.lastValue
         return when {
-            // Lockout position (elbow angle > 160°)
-            elbowAngle >= 160f -> MovementPhase.LOCKOUT
-
-            // Bottom position (elbow angle 60-90° - bar at chest)
-            elbowAngle in 60f..90f -> MovementPhase.BOTTOM
-
-            // Descent phase (elbow angle 120-160°, lowering bar)
-            elbowAngle in 120f..160f && !isAtBottom -> MovementPhase.DESCENT
-
-            // Ascent phase (elbow angle 90-150°, pressing up)
-            elbowAngle in 90f..150f && isAtBottom -> MovementPhase.ASCENT
-
-            // Transitional positions
-            else -> MovementPhase.TRANSITION
+            elbow >= ELBOW_LOCKOUT_TARGET -> MovementPhase.LOCKOUT
+            currentState == State.DESCENT -> MovementPhase.DESCENT
+            currentState == State.BOTTOM || elbow < ELBOW_BOTTOM_LIMIT -> MovementPhase.BOTTOM
+            else -> MovementPhase.ASCENT
         }
     }
 
     override fun getFormDiagnostics(pose: PoseDetectionResult.Success): List<FormDiagnostic> {
-        val diagnostics = mutableListOf<FormDiagnostic>()
-        val landmarks = pose.landmarks
+        val flare = calculateElbowFlare(pose)
+        val elbow = elbowSmoother.lastValue
 
-        val leftShoulder = landmarks.getOrNull(11)
-        val leftElbow = landmarks.getOrNull(13)
-        val leftWrist = landmarks.getOrNull(15)
-        val rightShoulder = landmarks.getOrNull(12)
-        val rightElbow = landmarks.getOrNull(14)
-        val rightWrist = landmarks.getOrNull(16)
-
-        // 1. Check elbow angle at bottom - always report
-        val elbowAngle = BilateralAngleCalculator.calculateBilateralAngle(
-            leftShoulder, leftElbow, leftWrist,
-            rightShoulder, rightElbow, rightWrist
+        return listOf(
+            FormDiagnostic(
+                issue = if (flare > FLARE_LIMIT_HIGH) "Excessive Elbow Flare" else "Good Elbow Path",
+                angle = "Elbow Flare",
+                measured = flare,
+                expected = "45-75°",
+                severity = if (flare > FLARE_LIMIT_HIGH) FormIssueSeverity.MODERATE else FormIssueSeverity.GOOD
+            ),
+            FormDiagnostic(
+                issue = "Depth Achievement",
+                angle = "Elbow Angle",
+                measured = elbow,
+                expected = "< 90°",
+                severity = if (elbow < 95f) FormIssueSeverity.GOOD else FormIssueSeverity.MODERATE
+            )
         )
+    }
 
-        elbowAngle?.let { angle ->
-            if (angle > 100f && isAtBottom) {
-                diagnostics.add(
-                    FormDiagnostic(
-                        issue = "Insufficient range of motion",
-                        angle = "Elbow angle",
-                        measured = angle,
-                        expected = "60-90° (bar to chest)",
-                        severity = FormIssueSeverity.MODERATE
-                    )
-                )
-            } else if (isAtBottom && angle <= 100f) {
-                diagnostics.add(
-                    FormDiagnostic(
-                        issue = "Full range of motion",
-                        angle = "Elbow angle",
-                        measured = angle,
-                        expected = "60-90° ✓",
-                        severity = FormIssueSeverity.GOOD
-                    )
-                )
-            }
-        }
+    private fun completeRep(time: Long) {
+        lastFormScore = calculateFormScore()
+        lastRepTime = time
+        resetRepMetrics()
+        currentState = State.START
+    }
 
-        // 2. Check elbow flare - always report elbow position
-        if (leftShoulder != null && leftElbow != null && rightShoulder != null && rightElbow != null) {
-            val shoulderWidth = kotlin.math.abs(leftShoulder.x() - rightShoulder.x())
-            val elbowWidth = kotlin.math.abs(leftElbow.x() - rightElbow.x())
-
-            if (shoulderWidth > 0.01f) {
-                val elbowFlareRatio = elbowWidth / shoulderWidth
-                if (elbowFlareRatio > 1.4f) {
-                    diagnostics.add(
-                        FormDiagnostic(
-                            issue = "Elbows flaring out too wide",
-                            angle = "Elbow position",
-                            measured = elbowFlareRatio * 100f,
-                            expected = "< 140% (45° tuck)",
-                            severity = FormIssueSeverity.MODERATE
-                        )
-                    )
-                } else {
-                    diagnostics.add(
-                        FormDiagnostic(
-                            issue = "Good elbow tuck",
-                            angle = "Elbow position",
-                            measured = elbowFlareRatio * 100f,
-                            expected = "< 140% ✓",
-                            severity = FormIssueSeverity.GOOD
-                        )
-                    )
-                }
-            }
-        }
-
-        // 3. Check lockout completion - always report at top
-        elbowAngle?.let { angle ->
-            if (angle < TOP_ANGLE_THRESHOLD && !isAtBottom) {
-                diagnostics.add(
-                    FormDiagnostic(
-                        issue = "Incomplete lockout",
-                        angle = "Lockout angle",
-                        measured = angle,
-                        expected = "≥ ${TOP_ANGLE_THRESHOLD.toInt()}°",
-                        severity = FormIssueSeverity.MINOR
-                    )
-                )
-            } else if (!isAtBottom && angle >= TOP_ANGLE_THRESHOLD) {
-                diagnostics.add(
-                    FormDiagnostic(
-                        issue = "Full lockout achieved",
-                        angle = "Lockout angle",
-                        measured = angle,
-                        expected = "≥ ${TOP_ANGLE_THRESHOLD.toInt()}° ✓",
-                        severity = FormIssueSeverity.GOOD
-                    )
-                )
-            }
-        }
-
-        return diagnostics
+    private fun resetRepMetrics() {
+        repMinElbowAngle = 180f
+        repMaxFlareAngle = 0f
+        repMaxLockoutAngle = 0f
     }
 
     override fun reset() {
-        isAtBottom = false
-        bottomFrameCount = 0
-        topFrameCount = 0
+        currentState = State.START
         lastRepTime = 0L
-        lastFormScore = 100f
-        lastSmoothedElbowAngle = 180f
-        elbowAngleSmoother.reset()
-        resetRepTracking()
+        resetRepMetrics()
+        elbowSmoother.reset()
     }
+
+    private fun getBilateralAngle(pose: PoseDetectionResult.Success, a: Int, b: Int, c: Int): Float? {
+        val left = AngleCalculator.calculateAngle(pose.getLandmark(a), pose.getLandmark(b), pose.getLandmark(c))
+        val right = AngleCalculator.calculateAngle(pose.getLandmark(a + 1), pose.getLandmark(b + 1), pose.getLandmark(c + 1))
+        return if (left != null && right != null) (left + right) / 2f else left ?: right
+    }
+
+    override fun formScore(): Float = lastFormScore
+    override fun hadGoodForm(): Boolean = lastFormScore >= 70f
 }
