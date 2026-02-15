@@ -221,7 +221,7 @@ class BenchPressExercise : Exercise {
         val rightElbow = landmarks.getOrNull(14)
         val rightWrist = landmarks.getOrNull(16)
 
-        // 1. Check elbow angle at bottom
+        // 1. Check elbow angle at bottom - always report
         val elbowAngle = BilateralAngleCalculator.calculateBilateralAngle(
             leftShoulder, leftElbow, leftWrist,
             rightShoulder, rightElbow, rightWrist
@@ -238,10 +238,20 @@ class BenchPressExercise : Exercise {
                         severity = FormIssueSeverity.MODERATE
                     )
                 )
+            } else if (isAtBottom && angle <= 100f) {
+                diagnostics.add(
+                    FormDiagnostic(
+                        issue = "Full range of motion",
+                        angle = "Elbow angle",
+                        measured = angle,
+                        expected = "60-90° ✓",
+                        severity = FormIssueSeverity.GOOD
+                    )
+                )
             }
         }
 
-        // 2. Check elbow flare (elbows too wide)
+        // 2. Check elbow flare - always report elbow position
         if (leftShoulder != null && leftElbow != null && rightShoulder != null && rightElbow != null) {
             val shoulderWidth = kotlin.math.abs(leftShoulder.x() - rightShoulder.x())
             val elbowWidth = kotlin.math.abs(leftElbow.x() - rightElbow.x())
@@ -252,26 +262,46 @@ class BenchPressExercise : Exercise {
                     diagnostics.add(
                         FormDiagnostic(
                             issue = "Elbows flaring out too wide",
-                            angle = "Elbow flare ratio",
+                            angle = "Elbow position",
                             measured = elbowFlareRatio * 100f,
-                            expected = "< 140% (45° tuck recommended)",
+                            expected = "< 140% (45° tuck)",
                             severity = FormIssueSeverity.MODERATE
+                        )
+                    )
+                } else {
+                    diagnostics.add(
+                        FormDiagnostic(
+                            issue = "Good elbow tuck",
+                            angle = "Elbow position",
+                            measured = elbowFlareRatio * 100f,
+                            expected = "< 140% ✓",
+                            severity = FormIssueSeverity.GOOD
                         )
                     )
                 }
             }
         }
 
-        // 3. Check lockout completion
+        // 3. Check lockout completion - always report at top
         elbowAngle?.let { angle ->
             if (angle < TOP_ANGLE_THRESHOLD && !isAtBottom) {
                 diagnostics.add(
                     FormDiagnostic(
                         issue = "Incomplete lockout",
-                        angle = "Elbow angle",
+                        angle = "Lockout angle",
                         measured = angle,
-                        expected = "≥ ${TOP_ANGLE_THRESHOLD.toInt()}° (full extension)",
+                        expected = "≥ ${TOP_ANGLE_THRESHOLD.toInt()}°",
                         severity = FormIssueSeverity.MINOR
+                    )
+                )
+            } else if (!isAtBottom && angle >= TOP_ANGLE_THRESHOLD) {
+                diagnostics.add(
+                    FormDiagnostic(
+                        issue = "Full lockout achieved",
+                        angle = "Lockout angle",
+                        measured = angle,
+                        expected = "≥ ${TOP_ANGLE_THRESHOLD.toInt()}° ✓",
+                        severity = FormIssueSeverity.GOOD
                     )
                 )
             }

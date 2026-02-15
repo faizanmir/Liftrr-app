@@ -53,6 +53,7 @@ data class FormDiagnostic(
 )
 
 enum class FormIssueSeverity {
+    GOOD,       // Correct form - angle within optimal range
     MINOR,      // Small deviation, not critical
     MODERATE,   // Noticeable issue that should be addressed
     CRITICAL    // Major form break that could lead to injury

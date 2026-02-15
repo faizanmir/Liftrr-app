@@ -258,7 +258,7 @@ class DeadliftExercise : Exercise {
         val rightHip = landmarks.getOrNull(24)
         val rightKnee = landmarks.getOrNull(26)
 
-        // 1. Check hip angle for proper lockout
+        // 1. Check hip angle for proper lockout - always report
         val hipAngle = BilateralAngleCalculator.calculateBilateralAngle(
             leftShoulder, leftHip, leftKnee,
             rightShoulder, rightHip, rightKnee
@@ -275,10 +275,20 @@ class DeadliftExercise : Exercise {
                         severity = if (angle < 150f) FormIssueSeverity.CRITICAL else FormIssueSeverity.MODERATE
                     )
                 )
+            } else if (isAtBottom && angle >= TOP_ANGLE_THRESHOLD) {
+                diagnostics.add(
+                    FormDiagnostic(
+                        issue = "Full lockout achieved",
+                        angle = "Hip angle",
+                        measured = angle,
+                        expected = "≥ ${TOP_ANGLE_THRESHOLD.toInt()}° ✓",
+                        severity = FormIssueSeverity.GOOD
+                    )
+                )
             }
         }
 
-        // 2. Check back straightness (trunk alignment)
+        // 2. Check back straightness (trunk alignment) - always report
         val leftAnkle = landmarks.getOrNull(27)
         val rightAnkle = landmarks.getOrNull(28)
 
@@ -293,25 +303,45 @@ class DeadliftExercise : Exercise {
                 diagnostics.add(
                     FormDiagnostic(
                         issue = "Rounded back - excessive forward lean",
-                        angle = "Trunk alignment ratio",
+                        angle = "Back straightness",
                         measured = ratio * 100f,
                         expected = "≥ 70%",
                         severity = FormIssueSeverity.CRITICAL
                     )
                 )
+            } else {
+                diagnostics.add(
+                    FormDiagnostic(
+                        issue = "Neutral spine maintained",
+                        angle = "Back straightness",
+                        measured = ratio * 100f,
+                        expected = "≥ 70% ✓",
+                        severity = FormIssueSeverity.GOOD
+                    )
+                )
             }
         }
 
-        // 3. Check if hips dropped too low
+        // 3. Check hip starting position - always report if at bottom
         hipAngle?.let { angle ->
-            if (angle < 50f) {
+            if (angle < 50f && !isAtBottom) {
                 diagnostics.add(
                     FormDiagnostic(
                         issue = "Hips too low - turning into squat",
-                        angle = "Hip angle",
+                        angle = "Hip starting position",
                         measured = angle,
                         expected = "60-120°",
                         severity = FormIssueSeverity.MODERATE
+                    )
+                )
+            } else if (!isAtBottom && angle in 60f..120f) {
+                diagnostics.add(
+                    FormDiagnostic(
+                        issue = "Good hip hinge position",
+                        angle = "Hip starting position",
+                        measured = angle,
+                        expected = "60-120° ✓",
+                        severity = FormIssueSeverity.GOOD
                     )
                 )
             }

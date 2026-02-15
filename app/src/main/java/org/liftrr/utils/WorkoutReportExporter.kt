@@ -398,6 +398,9 @@ object WorkoutReportExporter {
 
                     val imageWidth = 250f
                     val imageHeight = 140f
+                    val diagPaint = Paint().apply {
+                        textSize = 9f
+                    }
 
                     // Draw good form on left
                     goodFrame?.let { frame ->
@@ -414,7 +417,32 @@ object WorkoutReportExporter {
                                 bitmap.recycle()
 
                                 // Good form label
-                                canvas.drawText("✓ Good Form", leftMargin, yPosition + imageHeight + 15f, textPaint)
+                                var labelY = yPosition + imageHeight + 15f
+                                val goodPaint = Paint().apply {
+                                    textSize = 14f
+                                    color = android.graphics.Color.parseColor("#2E7D32") // Green
+                                    isFakeBoldText = true
+                                }
+                                canvas.drawText("✓ Good Form", leftMargin, labelY, goodPaint)
+                                labelY += 14f
+
+                                // Display form score
+                                diagPaint.color = android.graphics.Color.parseColor("#2E7D32")
+                                val scoreText = "Score: ${(frame.formScore ?: 0f * 100).toInt()}%"
+                                canvas.drawText(scoreText, leftMargin, labelY, diagPaint)
+                                labelY += 11f
+
+                                // Display diagnostics or key angles
+                                if (frame.diagnostics.isNotEmpty()) {
+                                    frame.diagnostics.take(3).forEach { diagnostic ->
+                                        canvas.drawText("• ${diagnostic.angle}: ${diagnostic.measured.toInt()}°", leftMargin, labelY, diagPaint)
+                                        labelY += 11f
+                                        canvas.drawText("  ${diagnostic.expected}", leftMargin, labelY, diagPaint)
+                                        labelY += 11f
+                                    }
+                                } else {
+                                    canvas.drawText("All angles within range", leftMargin, labelY, diagPaint)
+                                }
                             }
                         } catch (e: Exception) {
                             android.util.Log.e("WorkoutReportExporter", "Error loading good form image", e)
@@ -438,26 +466,35 @@ object WorkoutReportExporter {
 
                                 // Bad form label
                                 var labelY = yPosition + imageHeight + 15f
-                                canvas.drawText("✗ Needs Work", rightX, labelY, textPaint)
+                                val badPaint = Paint().apply {
+                                    textSize = 14f
+                                    color = android.graphics.Color.parseColor("#D32F2F") // Red
+                                    isFakeBoldText = true
+                                }
+                                canvas.drawText("✗ Needs Work", rightX, labelY, badPaint)
+                                labelY += 14f
 
-                                // Display diagnostics if available
+                                // Display form score
+                                diagPaint.color = android.graphics.Color.parseColor("#D32F2F")
+                                val scoreText = "Score: ${(frame.formScore ?: 0f * 100).toInt()}%"
+                                canvas.drawText(scoreText, rightX, labelY, diagPaint)
+                                labelY += 11f
+
+                                // Display detailed diagnostics with reasoning
                                 if (frame.diagnostics.isNotEmpty()) {
-                                    val diagPaint = Paint().apply {
-                                        textSize = 10f
-                                        color = android.graphics.Color.parseColor("#D32F2F") // Red color
+                                    frame.diagnostics.take(3).forEach { diagnostic ->
+                                        // Issue description
+                                        canvas.drawText("• ${diagnostic.issue}", rightX, labelY, diagPaint)
+                                        labelY += 11f
+                                        // Measured angle
+                                        canvas.drawText("  ${diagnostic.angle}: ${diagnostic.measured.toInt()}°", rightX, labelY, diagPaint)
+                                        labelY += 11f
+                                        // Expected range
+                                        canvas.drawText("  Expected: ${diagnostic.expected}", rightX, labelY, diagPaint)
+                                        labelY += 11f
                                     }
-                                    labelY += 12f
-                                    frame.diagnostics.take(2).forEach { diagnostic ->
-                                        val diagText = "${diagnostic.issue}"
-                                        canvas.drawText(diagText, rightX, labelY, diagPaint)
-                                        labelY += 12f
-                                        val angleText = "${diagnostic.angle}: ${diagnostic.measured.toInt()}°"
-                                        canvas.drawText(angleText, rightX + 10, labelY, diagPaint)
-                                        labelY += 12f
-                                        val expectedText = "Expected: ${diagnostic.expected}"
-                                        canvas.drawText(expectedText, rightX + 10, labelY, diagPaint)
-                                        labelY += 14f
-                                    }
+                                } else {
+                                    canvas.drawText("Low form score - check technique", rightX, labelY, diagPaint)
                                 }
                             }
                         } catch (e: Exception) {
@@ -465,7 +502,7 @@ object WorkoutReportExporter {
                         }
                     }
 
-                    yPosition += imageHeight + 35f
+                    yPosition += imageHeight + 80f // More space for diagnostics
                 }
             }
 

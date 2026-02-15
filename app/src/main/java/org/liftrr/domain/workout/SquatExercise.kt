@@ -252,7 +252,7 @@ class SquatExercise : Exercise {
         val rightKnee = landmarks.getOrNull(26)
         val rightAnkle = landmarks.getOrNull(28)
 
-        // 1. Check squat depth
+        // 1. Check squat depth (always report knee angle)
         val kneeAngle = BilateralAngleCalculator.calculateBilateralAngle(
             leftHip, leftKnee, leftAnkle,
             rightHip, rightKnee, rightAnkle
@@ -269,10 +269,21 @@ class SquatExercise : Exercise {
                         severity = if (angle > 120f) FormIssueSeverity.CRITICAL else FormIssueSeverity.MODERATE
                     )
                 )
+            } else if (isAtBottom) {
+                // Good depth - still report the angle
+                diagnostics.add(
+                    FormDiagnostic(
+                        issue = "Good depth achieved",
+                        angle = "Knee angle",
+                        measured = angle,
+                        expected = "< ${DEPTH_THRESHOLD_ANGLE.toInt()}° ✓",
+                        severity = FormIssueSeverity.GOOD
+                    )
+                )
             }
         }
 
-        // 2. Check knee valgus (knees caving in)
+        // 2. Check knee valgus (knees caving in) - always report knee tracking
         if (leftKnee != null && rightKnee != null && leftAnkle != null && rightAnkle != null) {
             val kneeWidth = kotlin.math.abs(leftKnee.x() - rightKnee.x())
             val ankleWidth = kotlin.math.abs(leftAnkle.x() - rightAnkle.x())
@@ -283,17 +294,27 @@ class SquatExercise : Exercise {
                     diagnostics.add(
                         FormDiagnostic(
                             issue = "Knees caving inward (valgus)",
-                            angle = "Knee tracking ratio",
+                            angle = "Knee tracking",
                             measured = kneeValgusRatio * 100f,
                             expected = "≥ 85% (knees over toes)",
                             severity = FormIssueSeverity.CRITICAL
+                        )
+                    )
+                } else {
+                    diagnostics.add(
+                        FormDiagnostic(
+                            issue = "Good knee tracking",
+                            angle = "Knee tracking",
+                            measured = kneeValgusRatio * 100f,
+                            expected = "≥ 85% ✓",
+                            severity = FormIssueSeverity.GOOD
                         )
                     )
                 }
             }
         }
 
-        // 3. Check forward lean
+        // 3. Check forward lean - always report torso angle
         if (leftHip != null && leftKnee != null && leftAnkle != null) {
             val hipKneeAngle = PoseAnalyzer.calculateAngle(leftAnkle, leftKnee, leftHip)
             if (hipKneeAngle > 100f) {
@@ -304,6 +325,16 @@ class SquatExercise : Exercise {
                         measured = hipKneeAngle,
                         expected = "< 100° (upright torso)",
                         severity = FormIssueSeverity.MODERATE
+                    )
+                )
+            } else {
+                diagnostics.add(
+                    FormDiagnostic(
+                        issue = "Good torso position",
+                        angle = "Torso angle",
+                        measured = hipKneeAngle,
+                        expected = "< 100° ✓",
+                        severity = FormIssueSeverity.GOOD
                     )
                 )
             }
