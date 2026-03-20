@@ -1,7 +1,5 @@
 package org.liftrr.domain.workout
 
-import org.liftrr.ml.ExerciseType
-
 object ExerciseFactory {
     fun create(exerciseType: ExerciseType): Exercise {
         return when (exerciseType) {

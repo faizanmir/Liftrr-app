@@ -13,8 +13,8 @@ class DeadliftExercise : Exercise {
     private var frameStabilityCount = 0
 
     // --- Smoothing Filters ---
-    private val hipSmoother = AngleSmoother(5)
-    private val kneeSmoother = AngleSmoother(5)
+    private val hipSmoother = AngleSmoother(3)
+    private val kneeSmoother = AngleSmoother(3)
 
     // --- Metrics for Score Calculation ---
     private var repMinKneeAngle = 180f
@@ -25,13 +25,13 @@ class DeadliftExercise : Exercise {
     companion object {
         // Biomechanical Logic Thresholds
         private const val HIP_START_THRESHOLD = 125f  // Hinge depth to start
-        private const val HIP_LOCKOUT_TARGET = 168f   // Full extension target
+        private const val HIP_LOCKOUT_TARGET = 160f   // Full extension target
         private const val KNEE_SQUAT_MIN = 95f        // Angle < 95 indicates "squatting" the lift
         private const val DRIFT_MAX_X = 0.10f         // Horizontal drift allowance
         private const val BACK_SAFETY_RATIO = 0.82f   // Torso height vs Thigh height
 
-        private const val MIN_REP_DURATION_MS = 1100L
-        private const val STABILITY_REQUIRED = 3
+        private const val MIN_REP_DURATION_MS = 700L
+        private const val STABILITY_REQUIRED = 2
     }
 
     override fun updateRepCount(pose: PoseDetectionResult.Success): Boolean {
@@ -71,6 +71,8 @@ class DeadliftExercise : Exercise {
                         currentState = State.ASCENDING
                         frameStabilityCount = 0
                     }
+                } else {
+                    frameStabilityCount = 0 // Reset when not in position
                 }
                 false
             }

@@ -59,6 +59,10 @@ android {
         getByName("debug") {
             signingConfig = signingConfigs.getByName("release")
             isDebuggable = true
+            val debugUrl = localProperties.getProperty("SERVER_URL_DEBUG")
+                ?: System.getenv("SERVER_URL_DEBUG")
+                ?: "http://10.0.2.2:8080"
+            buildConfigField("String", "SERVER_URL", "\"$debugUrl\"")
         }
 
         getByName("release") {
@@ -69,6 +73,10 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
+            val releaseUrl = localProperties.getProperty("SERVER_URL_RELEASE")
+                ?: System.getenv("SERVER_URL_RELEASE")
+                ?: ""
+            buildConfigField("String", "SERVER_URL", "\"$releaseUrl\"")
         }
     }
 
@@ -187,6 +195,7 @@ dependencies {
     // Retrofit
     implementation(libs.retrofit)
     implementation(libs.converter.gson)
+    implementation(libs.okhttp.logging.interceptor)
 
     // UI & Material
     implementation(libs.material)

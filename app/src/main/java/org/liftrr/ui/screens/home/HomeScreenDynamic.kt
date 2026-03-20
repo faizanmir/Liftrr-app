@@ -106,7 +106,6 @@ fun HomeScreenContent(
             is HomeUiState.Success -> {
                 if (state.todayStats == null && state.recentActivity.isEmpty()) {
                     EmptyStateView(
-                        deviceStatus = state.deviceStatus,
                         modifier = Modifier.padding(padding)
                     )
                 } else {
@@ -137,7 +136,6 @@ fun HomeScreenContent(
 
 @Composable
 private fun EmptyStateView(
-    deviceStatus: DeviceStatus,
     modifier: Modifier = Modifier
 ) {
     Column(
@@ -186,57 +184,6 @@ private fun EmptyStateView(
             textAlign = TextAlign.Center
         )
 
-        Spacer(modifier = Modifier.height(40.dp))
-
-        // Device status
-        if (deviceStatus.isConnected) {
-            Surface(
-                shape = RoundedCornerShape(12.dp),
-                color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.3f)
-            ) {
-                Row(
-                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .size(8.dp)
-                            .clip(CircleShape)
-                            .background(Color(0xFF7CB342))
-                    )
-                    Text(
-                        "${deviceStatus.deviceName} Connected • ${deviceStatus.batteryPercent}% Battery",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-            }
-        } else {
-            Surface(
-                shape = RoundedCornerShape(12.dp),
-                color = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.3f)
-            ) {
-                Row(
-                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    Icon(
-                        Icons.Outlined.BluetoothDisabled,
-                        contentDescription = null,
-                        modifier = Modifier.size(16.dp),
-                        tint = MaterialTheme.colorScheme.error
-                    )
-                    Text(
-                        "No Device Connected",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onErrorContainer
-                    )
-                }
-            }
-        }
-
         Spacer(modifier = Modifier.weight(1f))
     }
 }
@@ -261,9 +208,7 @@ private fun HomeContent(
             .verticalScroll(rememberScrollState())
     ) {
         // Hero Section
-        HeroSection(
-            deviceStatus = uiState.deviceStatus
-        )
+        HeroSection()
 
         Spacer(modifier = Modifier.height(24.dp))
 
@@ -309,9 +254,7 @@ private fun HomeContent(
 }
 
 @Composable
-private fun HeroSection(
-    deviceStatus: DeviceStatus
-) {
+private fun HeroSection() {
     val infiniteTransition = rememberInfiniteTransition(label = "gradient")
     val animatedOffset by infiniteTransition.animateFloat(
         initialValue = 0f,
@@ -376,30 +319,6 @@ private fun HeroSection(
                 style = MaterialTheme.typography.headlineMedium,
                 fontWeight = FontWeight.Bold
             )
-            Spacer(modifier = Modifier.height(6.dp))
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(6.dp)
-            ) {
-                Box(
-                    modifier = Modifier
-                        .size(8.dp)
-                        .clip(CircleShape)
-                        .background(
-                            if (deviceStatus.isConnected) Color(0xFF7CB342)
-                            else Color(0xFFFF5252)
-                        )
-                )
-                Text(
-                    if (deviceStatus.isConnected) {
-                        "${deviceStatus.deviceName} • ${deviceStatus.batteryPercent}% Battery"
-                    } else {
-                        "No Device Connected"
-                    },
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
         }
     }
 }
@@ -1046,18 +965,6 @@ private val sampleRecentActivity = listOf(
     )
 )
 
-private val sampleDeviceStatusConnected = DeviceStatus(
-    isConnected = true,
-    deviceName = "LIFTRR-001",
-    batteryPercent = 87
-)
-
-private val sampleDeviceStatusDisconnected = DeviceStatus(
-    isConnected = false,
-    deviceName = null,
-    batteryPercent = 0
-)
-
 @Preview(showBackground = true, name = "Empty State")
 @Composable
 private fun HomeScreenEmptyPreview() {
@@ -1066,8 +973,7 @@ private fun HomeScreenEmptyPreview() {
             uiState = HomeUiState.Success(
                 todayStats = null,
                 weeklyProgress = null,
-                recentActivity = emptyList(),
-                deviceStatus = sampleDeviceStatusDisconnected
+                recentActivity = emptyList()
             ),
             onStartWorkout = {}
         )
@@ -1082,8 +988,7 @@ private fun HomeScreenWithDataPreview() {
             uiState = HomeUiState.Success(
                 todayStats = sampleTodayStats,
                 weeklyProgress = sampleWeeklyProgress,
-                recentActivity = sampleRecentActivity,
-                deviceStatus = sampleDeviceStatusConnected
+                recentActivity = sampleRecentActivity
             ),
             onStartWorkout = {}
         )

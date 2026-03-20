@@ -9,15 +9,15 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
-import org.liftrr.data.models.AuthResult
-import org.liftrr.data.models.UserDto
-import org.liftrr.data.repository.AuthRepository
+import org.liftrr.domain.auth.AuthRepository
+import org.liftrr.domain.auth.AuthResult
+import org.liftrr.domain.user.User
 import javax.inject.Inject
 
 sealed class AuthUiState {
     data object Idle : AuthUiState()
     data object Loading : AuthUiState()
-    data class Success(val user: UserDto) : AuthUiState()
+    data class Success(val user: User) : AuthUiState()
     data class Error(val message: String) : AuthUiState()
 }
 
@@ -29,8 +29,8 @@ class AuthViewModel @Inject constructor(
     private val _uiState = MutableStateFlow<AuthUiState>(AuthUiState.Idle)
     val uiState: StateFlow<AuthUiState> = _uiState.asStateFlow()
 
-    private val _currentUser = MutableStateFlow<UserDto?>(null)
-    val currentUser: StateFlow<UserDto?> = _currentUser.asStateFlow()
+    private val _currentUser = MutableStateFlow<User?>(null)
+    val currentUser: StateFlow<User?> = _currentUser.asStateFlow()
 
     companion object {
         private const val TAG = "AuthViewModel"
@@ -65,20 +65,15 @@ class AuthViewModel @Inject constructor(
         }
     }
 
-    fun signUpWithEmailPassword(
-        email: String,
-        password: String,
-        firstName: String,
-        lastName: String
-    ) {
+    fun signUpWithEmailPassword(email: String, password: String) {
         viewModelScope.launch {
             _uiState.value = AuthUiState.Loading
 
             when (val result = authRepository.signUpWithEmailPassword(
                 email = email,
                 password = password,
-                firstName = firstName.ifBlank { null },
-                lastName = lastName.ifBlank { null }
+                firstName = null,
+                lastName = null
             )) {
                 is AuthResult.Success -> {
                     Log.d(TAG, "Sign up successful: ${result.user}")

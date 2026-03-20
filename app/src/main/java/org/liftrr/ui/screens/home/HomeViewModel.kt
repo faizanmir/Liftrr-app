@@ -8,9 +8,9 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.launch
-import org.liftrr.data.models.WorkoutSessionEntity
-import org.liftrr.data.repository.WorkoutRepository
-import org.liftrr.ml.ExerciseType
+import org.liftrr.domain.workout.WorkoutRecord
+import org.liftrr.domain.workout.WorkoutRepository
+import org.liftrr.domain.workout.ExerciseType
 import java.util.Calendar
 import java.util.concurrent.TimeUnit
 import javax.inject.Inject
@@ -51,12 +51,7 @@ class HomeViewModel @Inject constructor(
                 HomeUiState.Success(
                     todayStats = todayStats,
                     weeklyProgress = weeklyProgress,
-                    recentActivity = recentActivity,
-                    deviceStatus = DeviceStatus(
-                        isConnected = false,
-                        deviceName = null,
-                        batteryPercent = 0
-                    )
+                    recentActivity = recentActivity
                 )
             }.collect { state ->
                 _uiState.value = state
@@ -64,7 +59,7 @@ class HomeViewModel @Inject constructor(
         }
     }
 
-    private fun calculateTodayStats(workouts: List<WorkoutSessionEntity>): TodayStats {
+    private fun calculateTodayStats(workouts: List<WorkoutRecord>): TodayStats {
         val totalReps = workouts.sumOf { it.totalReps }
         val goodReps = workouts.sumOf { it.goodReps }
         val avgQuality = workouts.map { it.averageQuality }.average().toFloat()
@@ -103,7 +98,7 @@ class HomeViewModel @Inject constructor(
     }
 
 
-    private fun calculateWeeklyProgress(weekWorkouts: List<WorkoutSessionEntity>): WeeklyProgress? {
+    private fun calculateWeeklyProgress(weekWorkouts: List<WorkoutRecord>): WeeklyProgress? {
         if (weekWorkouts.isEmpty()) return null
 
         val today = Calendar.getInstance()
@@ -138,7 +133,7 @@ class HomeViewModel @Inject constructor(
         )
     }
 
-    private fun mapToActivityItem(workout: WorkoutSessionEntity): ActivityItem {
+    private fun mapToActivityItem(workout: WorkoutRecord): ActivityItem {
         val weightStr = if (workout.weight != null && workout.weight > 0) {
             "${workout.weight.toInt()} kg"
         } else {
@@ -188,8 +183,7 @@ sealed class HomeUiState {
     data class Success(
         val todayStats: TodayStats?,
         val weeklyProgress: WeeklyProgress?,
-        val recentActivity: List<ActivityItem>,
-        val deviceStatus: DeviceStatus
+        val recentActivity: List<ActivityItem>
     ) : HomeUiState()
     data class Error(val message: String) : HomeUiState()
 }
@@ -222,8 +216,3 @@ data class ActivityItem(
     val timeAgo: String
 )
 
-data class DeviceStatus(
-    val isConnected: Boolean,
-    val deviceName: String?,
-    val batteryPercent: Int
-)

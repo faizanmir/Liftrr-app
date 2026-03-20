@@ -10,10 +10,10 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
-import org.liftrr.data.models.WorkoutSessionEntity
-import org.liftrr.data.repository.WorkoutRepository
-import org.liftrr.domain.workmanager.WorkoutCleanupScheduler
-import org.liftrr.ml.ExerciseType
+import org.liftrr.domain.workout.WorkoutRecord
+import org.liftrr.domain.workout.WorkoutRepository
+import org.liftrr.data.workmanager.WorkoutCleanupScheduler
+import org.liftrr.domain.workout.ExerciseType
 import org.liftrr.utils.DispatcherProvider
 import java.util.Calendar
 import javax.inject.Inject
@@ -131,7 +131,7 @@ class HistoryViewModel @Inject constructor(
         _showUndoSnackbar.value = null
     }
 
-    private fun groupByDate(workouts: List<WorkoutSessionEntity>): List<HistoryListItem> {
+    private fun groupByDate(workouts: List<WorkoutRecord>): List<HistoryListItem> {
         if (workouts.isEmpty()) return emptyList()
 
         val todayStart = Calendar.getInstance().apply {

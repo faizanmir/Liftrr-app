@@ -1,10 +1,8 @@
 package org.liftrr.ui.screens.playback
 
 import android.app.Activity
-import android.net.Uri
 import android.view.WindowManager
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
@@ -44,7 +42,7 @@ import ir.ehsannarmani.compose_charts.LineChart
 import ir.ehsannarmani.compose_charts.models.AnimationMode
 import ir.ehsannarmani.compose_charts.models.DrawStyle
 import ir.ehsannarmani.compose_charts.models.Line
-import org.liftrr.data.models.RepDataDto
+import org.liftrr.data.models.dto.RepDataDto
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable

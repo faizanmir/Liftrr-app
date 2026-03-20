@@ -13,13 +13,13 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import org.liftrr.data.models.RepDataDto
-import org.liftrr.data.repository.WorkoutRepository
+import org.liftrr.data.models.dto.RepDataDto
+import org.liftrr.domain.workout.WorkoutRepository
 import org.liftrr.domain.analytics.FormConsistencyAnalysis
 import org.liftrr.domain.analytics.SymmetryAnalysis
 import org.liftrr.domain.analytics.TempoAnalysis
 import org.liftrr.domain.analytics.WorkoutReport
-import org.liftrr.ml.ExerciseType
+import org.liftrr.domain.workout.ExerciseType
 import org.liftrr.utils.DispatcherProvider
 import org.liftrr.utils.WorkoutReportExporter
 import javax.inject.Inject

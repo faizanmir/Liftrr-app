@@ -20,36 +20,28 @@ import androidx.navigation3.runtime.entryProvider
 import androidx.navigation3.runtime.rememberNavBackStack
 import androidx.navigation3.runtime.rememberSaveableStateHolderNavEntryDecorator
 import androidx.activity.compose.BackHandler
-import androidx.activity.compose.LocalOnBackPressedDispatcherOwner
 import androidx.compose.animation.AnimatedContent
-import androidx.compose.animation.core.tween
 import androidx.compose.animation.togetherWith
 import android.util.Log
-import androidx.compose.runtime.DisposableEffect
-import androidx.compose.ui.platform.LocalLifecycleOwner
-import androidx.lifecycle.Lifecycle
-import androidx.lifecycle.LifecycleEventObserver
 import androidx.navigation3.ui.NavDisplay
 import org.liftrr.ui.navigation.NavigationAnimations
 import androidx.navigationevent.compose.LocalNavigationEventDispatcherOwner
 import androidx.navigationevent.compose.rememberNavigationEventDispatcherOwner
 import kotlinx.serialization.Serializable
-import org.liftrr.data.preferences.ThemePreferences
+import org.liftrr.data.local.preferences.ThemePreferences
 import org.liftrr.domain.workout.WorkoutReportHolder
-import org.liftrr.ml.ExerciseType
-import org.liftrr.ui.screens.connection.DeviceConnectionScreen
+import org.liftrr.domain.workout.ExerciseType
 import org.liftrr.ui.screens.analytics.AnalyticsScreen
 import org.liftrr.ui.screens.history.HistoryScreen
 import org.liftrr.ui.screens.home.HomeScreen
 import org.liftrr.ui.screens.permissions.PermissionScreen
 import org.liftrr.ui.screens.playback.WorkoutPlaybackScreen
 import org.liftrr.ui.screens.session.SessionSetupScreen
-import org.liftrr.ui.screens.session.WorkoutMode
+import org.liftrr.domain.workout.WorkoutMode
 import org.liftrr.ui.screens.user.profile.AuthenticationScreen
 import org.liftrr.ui.screens.user.profile.ProfileScreen
-import org.liftrr.ui.screens.profile.*
+import org.liftrr.ui.screens.user.onboarding.UserDetailsScreen
 import org.liftrr.ui.screens.welcome.WelcomeScreen
-import org.liftrr.data.models.PromptType
 import org.liftrr.ui.screens.workout.ExerciseSelectionScreen
 import org.liftrr.ui.screens.workout.WorkoutPreparationScreen
 import org.liftrr.ui.screens.workout.WorkoutScreen
@@ -62,7 +54,6 @@ sealed class Screen : NavKey {
     // Onboarding
     @Serializable data object Welcome : Screen()
     @Serializable data object PermissionScreen : Screen()
-    @Serializable data object DeviceConnectionScreen : Screen()
     @Serializable data class CreateProfile(val returnToProfile: Boolean = false) : Screen()
 
     // Main
@@ -71,14 +62,17 @@ sealed class Screen : NavKey {
     @Serializable data object Analytics : Screen()
     @Serializable data object Settings : Screen()
 
+    // User details onboarding (shown after login/signup)
+    @Serializable data object UserDetails : Screen()
+
     // Profile Settings
     @Serializable data class ProfileOnboarding(val isEditMode: Boolean = false) : Screen()
 
     // Workout flow
     @Serializable data object SessionSetup : Screen()
-    @Serializable data class ExerciseSelection(val mode: WorkoutMode) : Screen()
-    @Serializable data class WorkoutPreparation(val mode: WorkoutMode, val exerciseType: String) : Screen()
-    @Serializable data class Workout(val mode: WorkoutMode, val exerciseType: String, val weight: Float? = null) : Screen()
+    @Serializable data object ExerciseSelection : Screen()
+    @Serializable data class WorkoutPreparation(val exerciseType: String) : Screen()
+    @Serializable data class Workout(val exerciseType: String, val weight: Float? = null) : Screen()
     @Serializable data object WorkoutSummary : Screen()
     @Serializable data class WorkoutPlayback(val sessionId: String) : Screen()
 }
@@ -105,8 +99,8 @@ private fun isModalScreen(screen: NavKey) = screen is Screen.Settings ||
  */
 private fun isFadeScreen(screen: NavKey) = screen is Screen.Welcome ||
         screen is Screen.PermissionScreen ||
-        screen is Screen.DeviceConnectionScreen ||
-        screen is Screen.CreateProfile
+        screen is Screen.CreateProfile ||
+        screen is Screen.UserDetails
 
 // ─── App Root ────────────────────────────────────────────────────────────────
 
@@ -211,7 +205,7 @@ fun LiftrrApp(appViewModel: AppViewModel = hiltViewModel()) {
                     }
                 },
                 label = "nav_animation"
-            ) {
+            ) { _ ->
                 NavDisplay(
                     backStack = backStack,
                     onBack = {}, // No-op: we handle back with BackHandler above
@@ -222,7 +216,7 @@ fun LiftrrApp(appViewModel: AppViewModel = hiltViewModel()) {
                     entryProvider = entryProvider {
                         onboardingEntries(goBack = goBack, navigate = ::navigate, backStack = backStack)
                         mainEntries(goBack = goBack, navigate = ::navigate)
-                        profileSettingsEntries(goBack = goBack, navigate = ::navigate)
+
                         workoutEntries(
                             goBack = goBack,
                             navigate = ::navigate,
@@ -248,24 +242,28 @@ private fun EntryProviderScope<NavKey>.onboardingEntries(
     }
 
     entry<Screen.PermissionScreen> {
-        PermissionScreen { navigate(Screen.DeviceConnectionScreen) }
-    }
-
-    entry<Screen.DeviceConnectionScreen> {
-        val isFromSessionSetup = backStack.contains(Screen.SessionSetup)
-        DeviceConnectionScreen(
-            onSkip = if (isFromSessionSetup) goBack else { { navigate(Screen.CreateProfile()) } },
-            onConnectionSuccess = if (isFromSessionSetup) goBack else null
-        )
+        PermissionScreen { navigate(Screen.CreateProfile()) }
     }
 
     entry<Screen.CreateProfile> { (returnToProfile) ->
         val onSuccess: () -> Unit =
-            if (returnToProfile) goBack else { { navigate(Screen.Home) } }
+            if (returnToProfile) goBack else { { navigate(Screen.UserDetails) } }
         AuthenticationScreen(
             onSignInSuccess = onSuccess,
             onSkip = if (returnToProfile) goBack else { { navigate(Screen.Home) } },
-            onSignUpSuccess = { onSuccess(); true }
+        )
+    }
+
+    entry<Screen.UserDetails> {
+        UserDetailsScreen(
+            onComplete = {
+                backStack.clear()
+                backStack.add(Screen.Home)
+            },
+            onSkip = {
+                backStack.clear()
+                backStack.add(Screen.Home)
+            }
         )
     }
 }
@@ -308,20 +306,6 @@ private fun EntryProviderScope<NavKey>.mainEntries(
     }
 }
 
-// ─── Profile Settings Entries ────────────────────────────────────────────────
-
-private fun EntryProviderScope<NavKey>.profileSettingsEntries(
-    goBack: () -> Unit,
-    navigate: (Screen) -> Unit
-) {
-    entry<Screen.ProfileOnboarding> { (isEditMode) ->
-        ProfileOnboardingFlow(
-            isEditMode = isEditMode,
-            onComplete = goBack,
-            onDismiss = goBack
-        )
-    }
-}
 
 // ─── Workout Flow Entries ────────────────────────────────────────────────────
 
@@ -334,32 +318,28 @@ private fun EntryProviderScope<NavKey>.workoutEntries(
     entry<Screen.SessionSetup> {
         SessionSetupScreen(
             onNavigateBack = goBack,
-            onNavigateToDeviceConnection = { navigate(Screen.DeviceConnectionScreen) },
-            onStartWorkout = { mode -> navigate(Screen.ExerciseSelection(mode)) }
+            onStartWorkout = { mode -> navigate(Screen.ExerciseSelection) }
         )
     }
 
-    entry<Screen.ExerciseSelection> { (mode) ->
+    entry<Screen.ExerciseSelection> {
         ExerciseSelectionScreen(
             onNavigateBack = goBack,
-            onExerciseSelected = { type -> navigate(Screen.WorkoutPreparation(mode, type.name)) }
+            onExerciseSelected = { type -> navigate(Screen.WorkoutPreparation( type.name)) }
         )
     }
 
-    entry<Screen.WorkoutPreparation> { (mode, exerciseType) ->
+    entry<Screen.WorkoutPreparation> { (exerciseType) ->
         WorkoutPreparationScreen(
-            workoutMode = mode,
             exerciseType = ExerciseType.valueOf(exerciseType),
             onNavigateBack = goBack,
-            onStartRecording = { weight -> navigate(Screen.Workout(mode, exerciseType, weight)) }
+            onStartRecording = { weight -> navigate(Screen.Workout(exerciseType, weight)) },
         )
     }
 
-    entry<Screen.Workout> { (mode, exerciseType, weight) ->
+    entry<Screen.Workout> { (exerciseType, weight) ->
         WorkoutScreen(
-            workoutMode = mode,
             exerciseType = ExerciseType.valueOf(exerciseType),
-            weight = weight,
             onNavigateBack = goBack,
             onWorkoutComplete = { navigate(Screen.WorkoutSummary) }
         )

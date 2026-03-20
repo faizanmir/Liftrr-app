@@ -2,11 +2,9 @@ package org.liftrr.domain.workout
 
 import org.liftrr.domain.analytics.WorkoutSession
 import org.liftrr.domain.analytics.WorkoutSessionBuilder
-import org.liftrr.ml.ExerciseType
 import org.liftrr.ml.PoseDetectionResult
 import org.liftrr.ml.PoseQuality
 import org.liftrr.ml.PoseQualityAnalyzer
-import org.liftrr.ui.screens.session.WorkoutMode
 
 class WorkoutEngine {
 
@@ -20,6 +18,9 @@ class WorkoutEngine {
     private var sessionBuilder: WorkoutSessionBuilder? = null
 
     private var isSessionActive = false
+
+    // Thread safety lock - protects shared mutable state accessed from Default and Main dispatchers
+    private val lock = Any()
 
     companion object {
         private const val MIN_POSE_QUALITY = 0.5f
@@ -65,8 +66,8 @@ class WorkoutEngine {
     /**
      * Process a pose detection result and return workout state
      */
-    fun processPoseResult(result: PoseDetectionResult): WorkoutState {
-        return when (result) {
+    fun processPoseResult(result: PoseDetectionResult): WorkoutState = synchronized(lock) {
+        when (result) {
             is PoseDetectionResult.Success -> processSuccessfulPose(result)
             is PoseDetectionResult.NoPoseDetected -> createWorkoutState(
                 formFeedback = "Position yourself in frame",
@@ -163,7 +164,7 @@ class WorkoutEngine {
     /**
      * Reset workout state
      */
-    fun reset() {
+    fun reset() = synchronized(lock) {
         currentExercise?.reset()
         reps.clear()
         repCount = 0
@@ -172,9 +173,9 @@ class WorkoutEngine {
     /**
      * Get current rep statistics
      */
-    fun getRepStats(): RepStats {
+    fun getRepStats(): RepStats = synchronized(lock) {
         val goodReps = reps.count { it.isGoodForm }
-        return RepStats(
+        RepStats(
             total = repCount,
             good = goodReps,
             bad = repCount - goodReps

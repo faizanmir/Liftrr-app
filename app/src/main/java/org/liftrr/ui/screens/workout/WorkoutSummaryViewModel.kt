@@ -8,59 +8,56 @@ import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import org.liftrr.data.repository.WorkoutRepository
+import org.liftrr.domain.workout.WorkoutRepository
 import org.liftrr.domain.analytics.WorkoutReport
 import org.liftrr.ml.WorkoutLLM
 import org.liftrr.utils.DispatcherProvider
 import org.liftrr.utils.WorkoutReportExporter
 import javax.inject.Inject
 
+data class WorkoutSummaryUiState(
+    val aiSummary: AIInsightState = AIInsightState.Idle,
+    val aiRecommendations: AIInsightState = AIInsightState.Idle,
+    val motivationalMessage: String? = null,
+    val isInitializing: Boolean = false,
+    val isExporting: Boolean = false
+)
+
 /**
  * ViewModel for WorkoutSummaryScreen with AI-enhanced insights
  */
 @HiltViewModel
 class WorkoutSummaryViewModel @Inject constructor(
-    @ApplicationContext private val context: Context,
+    @param:ApplicationContext private val context: Context,
     private val workoutLLM: WorkoutLLM,
     private val workoutRepository: WorkoutRepository,
     private val dispatchers: DispatcherProvider
 ) : ViewModel() {
 
-    private val _aiSummary = MutableStateFlow<AIInsightState>(AIInsightState.Idle)
-    val aiSummary: StateFlow<AIInsightState> = _aiSummary.asStateFlow()
-
-    private val _aiRecommendations = MutableStateFlow<AIInsightState>(AIInsightState.Idle)
-    val aiRecommendations: StateFlow<AIInsightState> = _aiRecommendations.asStateFlow()
-
-    private val _motivationalMessage = MutableStateFlow<String?>(null)
-    val motivationalMessage: StateFlow<String?> = _motivationalMessage.asStateFlow()
-
-    private val _isInitializing = MutableStateFlow(false)
-    val isInitializing: StateFlow<Boolean> = _isInitializing.asStateFlow()
-
-    private val _isExporting = MutableStateFlow(false)
-    val isExporting: StateFlow<Boolean> = _isExporting.asStateFlow()
+    private val _uiState = MutableStateFlow(WorkoutSummaryUiState())
+    val uiState: StateFlow<WorkoutSummaryUiState> = _uiState.asStateFlow()
 
     private var isLLMInitialized = false
 
     private suspend fun ensureLLMInitialized() {
         if (isLLMInitialized) return
 
-        _isInitializing.value = true
+        _uiState.update { it.copy(isInitializing = true) }
         try {
-            // Offload LLM initialization to IO thread to prevent ANR
-            withContext(dispatchers.io) {
-                workoutLLM.initialize()
-            }
+            withContext(dispatchers.io) { workoutLLM.initialize() }
             isLLMInitialized = true
         } catch (e: Exception) {
-            // LLM initialization failed, insights will show error state
-            _aiSummary.value = AIInsightState.Error("AI model not available: ${e.message}")
-            _aiRecommendations.value = AIInsightState.Error("AI model not available")
+            _uiState.update {
+                it.copy(
+                    aiSummary = AIInsightState.Error("AI model not available: ${e.message}"),
+                    aiRecommendations = AIInsightState.Error("AI model not available")
+                )
+            }
         } finally {
-            _isInitializing.value = false
+            _uiState.update { it.copy(isInitializing = false) }
         }
     }
 
@@ -84,63 +81,49 @@ class WorkoutSummaryViewModel @Inject constructor(
     }
 
     private suspend fun generateSummary(report: WorkoutReport) {
-        _aiSummary.value = AIInsightState.Loading
-
+        _uiState.update { it.copy(aiSummary = AIInsightState.Loading) }
         try {
-            // Offload LLM inference to IO thread to prevent ANR
-            val summary = withContext(dispatchers.io) {
-                workoutLLM.generateWorkoutSummary(report)
-            }
-
-            _aiSummary.value = if (summary != null) {
-                AIInsightState.Success(summary)
-            } else {
-                AIInsightState.Error("Could not generate summary")
+            val summary = withContext(dispatchers.io) { workoutLLM.generateWorkoutSummary(report) }
+            _uiState.update {
+                it.copy(
+                    aiSummary = if (summary != null) AIInsightState.Success(summary)
+                    else AIInsightState.Error("Could not generate summary")
+                )
             }
         } catch (e: Exception) {
-            _aiSummary.value = AIInsightState.Error(e.message ?: "Unknown error")
+            _uiState.update { it.copy(aiSummary = AIInsightState.Error(e.message ?: "Unknown error")) }
         }
     }
 
     private suspend fun generateRecommendations(report: WorkoutReport) {
-        _aiRecommendations.value = AIInsightState.Loading
-
+        _uiState.update { it.copy(aiRecommendations = AIInsightState.Loading) }
         try {
-            // Offload LLM inference to IO thread to prevent ANR
             val recommendations = withContext(dispatchers.io) {
-                workoutLLM.generatePersonalizedRecommendations(
-                    report = report,
-                    userGoals = null // Could be retrieved from user profile
+                workoutLLM.generatePersonalizedRecommendations(report = report, userGoals = null)
+            }
+            _uiState.update {
+                it.copy(
+                    aiRecommendations = if (recommendations != null) AIInsightState.Success(recommendations)
+                    else AIInsightState.Error("Could not generate recommendations")
                 )
             }
-
-            _aiRecommendations.value = if (recommendations != null) {
-                AIInsightState.Success(recommendations)
-            } else {
-                AIInsightState.Error("Could not generate recommendations")
-            }
         } catch (e: Exception) {
-            _aiRecommendations.value = AIInsightState.Error(e.message ?: "Unknown error")
+            _uiState.update { it.copy(aiRecommendations = AIInsightState.Error(e.message ?: "Unknown error")) }
         }
     }
 
     private suspend fun generateMotivation(report: WorkoutReport) {
         try {
-            val context = when {
+            val ctx = when {
                 report.overallScore >= 90 -> "after an excellent workout"
                 report.overallScore >= 75 -> "after a good workout"
                 report.overallScore >= 60 -> "after completing a challenging workout"
                 else -> "to keep improving"
             }
-
-            // Offload LLM inference to IO thread to prevent ANR
-            val message = withContext(dispatchers.io) {
-                workoutLLM.generateMotivation(context)
-            }
-            _motivationalMessage.value = message
+            val message = withContext(dispatchers.io) { workoutLLM.generateMotivation(ctx) }
+            _uiState.update { it.copy(motivationalMessage = message) }
         } catch (e: Exception) {
-            // Motivation is optional, silently fail
-            _motivationalMessage.value = null
+            _uiState.update { it.copy(motivationalMessage = null) }
         }
     }
 
@@ -157,7 +140,7 @@ class WorkoutSummaryViewModel @Inject constructor(
     fun shareAsPdf(report: WorkoutReport) {
         viewModelScope.launch(dispatchers.io) {
             try {
-                _isExporting.value = true
+                _uiState.update { it.copy(isExporting = true) }
                 android.util.Log.d("WorkoutSummaryVM", "Starting PDF export for session ${report.sessionId}")
 
                 // Load key frames from database
@@ -176,7 +159,7 @@ class WorkoutSummaryViewModel @Inject constructor(
                 android.util.Log.e("WorkoutSummaryVM", "Failed to share PDF", e)
                 e.printStackTrace()
             } finally {
-                _isExporting.value = false
+                _uiState.update { it.copy(isExporting = false) }
             }
         }
     }
@@ -187,7 +170,7 @@ class WorkoutSummaryViewModel @Inject constructor(
     fun shareAsText(report: WorkoutReport) {
         viewModelScope.launch(dispatchers.io) {
             try {
-                _isExporting.value = true
+                _uiState.update { it.copy(isExporting = true) }
                 android.util.Log.d("WorkoutSummaryVM", "Exporting text report for session ${report.sessionId}")
                 val text = WorkoutReportExporter.exportAsText(report)
                 android.util.Log.d("WorkoutSummaryVM", "Text report created, length: ${text.length}")
@@ -200,7 +183,7 @@ class WorkoutSummaryViewModel @Inject constructor(
                 android.util.Log.e("WorkoutSummaryVM", "Failed to share text", e)
                 e.printStackTrace()
             } finally {
-                _isExporting.value = false
+                _uiState.update { it.copy(isExporting = false) }
             }
         }
     }

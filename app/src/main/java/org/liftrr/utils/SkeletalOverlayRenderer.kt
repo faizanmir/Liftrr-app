@@ -5,7 +5,7 @@ import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Paint
 import org.liftrr.ml.PoseDetectionResult
-import org.liftrr.ml.PoseLandmarks
+import org.liftrr.domain.pose.PoseLandmarks
 
 /**
  * Renders skeletal overlay on workout frames

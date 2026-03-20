@@ -1,5 +1,7 @@
 package org.liftrr.domain.analytics
 
+import org.liftrr.domain.workout.ExerciseType
+
 class RecommendationGenerator {
     fun generate(
         session: WorkoutSession,
@@ -41,7 +43,7 @@ class RecommendationGenerator {
         }
 
         // 2. CONSISTENCY & ROM (Technical Proficiency)
-        if (rom.averageDepth > AnalysisConstants.SHALLOW_SQUAT_THRESHOLD && session.exerciseType == org.liftrr.ml.ExerciseType.SQUAT) {
+        if (rom.averageDepth > AnalysisConstants.SHALLOW_SQUAT_THRESHOLD && session.exerciseType == ExerciseType.SQUAT) {
             recs.add("Work on your mobility; your squats are currently a bit shallow.")
         } else if (rom.consistency < AnalysisConstants.ROM_CONSISTENCY_THRESHOLD) {
             recs.add("Consistency is key. Focus on hitting the same depth/turnaround point on every rep.")

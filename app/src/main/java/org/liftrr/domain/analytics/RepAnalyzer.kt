@@ -1,7 +1,7 @@
 package org.liftrr.domain.analytics
 
 import org.liftrr.domain.workout.RepData
-import org.liftrr.ml.ExerciseType
+import org.liftrr.domain.workout.ExerciseType
 import org.liftrr.ml.PoseAnalyzer
 import org.liftrr.ml.PoseDetectionResult
 import kotlin.math.abs

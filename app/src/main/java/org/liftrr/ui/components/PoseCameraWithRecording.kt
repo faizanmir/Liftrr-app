@@ -21,8 +21,9 @@ import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.ContextCompat
 import androidx.core.graphics.createBitmap
 import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.lifecycle.viewmodel.compose.viewModel
 import kotlinx.coroutines.asExecutor
-import org.liftrr.domain.video.VideoRecordingManager
+import org.liftrr.data.video.VideoRecordingManager
 import org.liftrr.utils.BitmapPool
 import org.liftrr.utils.DefaultDispatcherProvider
 import org.liftrr.utils.DispatcherProvider
@@ -41,7 +42,6 @@ fun PoseCameraWithRecording(
     onRecordingStopped: (String) -> Unit = {},
     onRecordingError: (String) -> Unit = {},
     cameraSelector: CameraSelector = CameraSelector.DEFAULT_BACK_CAMERA,
-    dispatchers: DispatcherProvider = DefaultDispatcherProvider(),
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
@@ -106,7 +106,7 @@ fun PoseCameraWithRecording(
                         .build()
                         .also { analysis ->
                             analysis.setAnalyzer(
-                                dispatchers.io.asExecutor()
+                                DefaultDispatcherProvider().io.asExecutor()
                             ) { imageProxy ->
                                 processImageProxyWithSkipping(
                                     imageProxy,

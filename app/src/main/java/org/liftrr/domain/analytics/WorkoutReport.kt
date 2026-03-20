@@ -1,6 +1,6 @@
 package org.liftrr.domain.analytics
 
-import org.liftrr.ml.ExerciseType
+import org.liftrr.domain.workout.ExerciseType
 
 data class WorkoutReport(
     val sessionId: String,

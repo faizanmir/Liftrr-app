@@ -1,7 +1,12 @@
 package org.liftrr.data.local
 
 import androidx.room.TypeConverter
-import org.liftrr.data.models.*
+import org.liftrr.data.models.dto.SyncOperation
+import org.liftrr.data.models.dto.SyncStatus
+import org.liftrr.domain.user.AuthProvider
+import org.liftrr.domain.user.FitnessLevel
+import org.liftrr.domain.user.Gender
+import org.liftrr.domain.user.UnitSystem
 
 /**
  * Room type converters for custom types and enums
@@ -99,21 +104,6 @@ class Converters {
             UnitSystem.valueOf(value)
         } catch (e: IllegalArgumentException) {
             UnitSystem.METRIC
-        }
-    }
-
-    // PromptType converters
-    @TypeConverter
-    fun fromPromptType(value: PromptType): String {
-        return value.name
-    }
-
-    @TypeConverter
-    fun toPromptType(value: String): PromptType {
-        return try {
-            PromptType.valueOf(value)
-        } catch (e: IllegalArgumentException) {
-            PromptType.FITNESS_LEVEL
         }
     }
 }

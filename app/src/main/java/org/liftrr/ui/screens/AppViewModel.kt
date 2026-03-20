@@ -7,7 +7,7 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
-import org.liftrr.data.repository.AuthRepository
+import org.liftrr.domain.auth.AuthRepository
 import javax.inject.Inject
 
 @HiltViewModel

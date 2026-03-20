@@ -1,7 +1,6 @@
 package org.liftrr.ui.screens.permissions
 
 import android.Manifest
-import android.os.Build
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -22,41 +21,30 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Sensors
-import androidx.compose.material.icons.outlined.Bluetooth
 import androidx.compose.material.icons.outlined.CameraAlt
-import androidx.compose.material.icons.outlined.LocationOn
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ElevatedButton
-import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.google.accompanist.permissions.ExperimentalPermissionsApi
-import com.google.accompanist.permissions.MultiplePermissionsState
 import com.google.accompanist.permissions.PermissionState
 import com.google.accompanist.permissions.PermissionStatus
 import com.google.accompanist.permissions.isGranted
-import com.google.accompanist.permissions.rememberMultiplePermissionsState
 import com.google.accompanist.permissions.rememberPermissionState
 import org.liftrr.ui.components.CircleShapeWithIcon
 import org.liftrr.ui.components.OnBoardingScreenHeadline
@@ -64,7 +52,7 @@ import org.liftrr.ui.components.OnBoardingScreenHeadlineDescription
 import org.liftrr.ui.theme.LiftrrTheme
 
 enum class PermissionId {
-    CAMERA, LOCATION, BLUETOOTH
+    CAMERA
 }
 
 data class PermissionItem(
@@ -78,25 +66,11 @@ data class PermissionItem(
 
 private val permissions = listOf(
     PermissionItem(
-        id = PermissionId.BLUETOOTH,
-        icon = Icons.Outlined.Bluetooth,
-        title = "Bluetooth",
-        description = "Connect to LIFTRR sensor device",
-        rationale = "Bluetooth is essential for discovering and connecting to the LIFTRR sensor. Please grant this permission to enable device communication.",
-        isRequired = true
-    ), PermissionItem(
         id = PermissionId.CAMERA,
         icon = Icons.Outlined.CameraAlt,
         title = "Camera",
         description = "Record video for pose analysis",
-        rationale = "Camera access allows the app to record your exercises for pose analysis, providing feedback on your form. This is an optional feature.",
-        isRequired = false
-    ), PermissionItem(
-        id = PermissionId.LOCATION,
-        icon = Icons.Outlined.LocationOn,
-        title = "Location",
-        description = "Required for Bluetooth scanning on Android",
-        rationale = "Android requires location access to scan for nearby Bluetooth devices. This is a system requirement for Bluetooth functionality.",
+        rationale = "Camera access allows the app to record your exercises for pose analysis, providing feedback on your form.",
         isRequired = true
     )
 )
@@ -106,43 +80,16 @@ private val permissions = listOf(
 fun PermissionScreen(permissionScreenViewModel: PermissionScreenViewModel = hiltViewModel(), onContinueClicked: () -> Unit = {}) {
     val state = permissionScreenViewModel.uiState.collectAsStateWithLifecycle()
 
-    // Hoist the permission states to this higher-level composable
     val cameraPermissionState = rememberPermissionState(Manifest.permission.CAMERA) { isGranted ->
         permissionScreenViewModel.onPermissionResult(PermissionId.CAMERA, isGranted)
     }
-    val locationPermissionState = rememberPermissionState(Manifest.permission.ACCESS_FINE_LOCATION) { isGranted ->
-        permissionScreenViewModel.onPermissionResult(PermissionId.LOCATION, isGranted)
-    }
 
-    val bluetoothPermissions = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-        listOf(Manifest.permission.BLUETOOTH_SCAN, Manifest.permission.BLUETOOTH_CONNECT)
-    } else {
-        listOf(Manifest.permission.BLUETOOTH, Manifest.permission.BLUETOOTH_ADMIN)
-    }
-    val bluetoothPermissionState = rememberMultiplePermissionsState(bluetoothPermissions) { permissionResults ->
-        permissionScreenViewModel.onPermissionResult(PermissionId.BLUETOOTH, permissionResults.all { it.value })
-    }
-
-    // This state is for the "Grant All" button to launch a single request
-    val allPermissionsState = rememberMultiplePermissionsState(
-        permissions = bluetoothPermissions + listOf(Manifest.permission.CAMERA, Manifest.permission.ACCESS_FINE_LOCATION)
-    )
-
-    // Track if user has denied permissions after being prompted
-    var hasAttemptedPermissionRequest by remember { mutableStateOf(false) }
-
-    // Update the ViewModel with the initial status of the permissions
     LaunchedEffect(Unit) {
         permissionScreenViewModel.onPermissionResult(PermissionId.CAMERA, cameraPermissionState.status.isGranted)
-        permissionScreenViewModel.onPermissionResult(PermissionId.LOCATION, locationPermissionState.status.isGranted)
-        permissionScreenViewModel.onPermissionResult(PermissionId.BLUETOOTH, bluetoothPermissionState.allPermissionsGranted)
     }
 
-    // Update permission states when they change
-    LaunchedEffect(allPermissionsState.allPermissionsGranted, allPermissionsState.permissions) {
+    LaunchedEffect(cameraPermissionState.status) {
         permissionScreenViewModel.onPermissionResult(PermissionId.CAMERA, cameraPermissionState.status.isGranted)
-        permissionScreenViewModel.onPermissionResult(PermissionId.LOCATION, locationPermissionState.status.isGranted)
-        permissionScreenViewModel.onPermissionResult(PermissionId.BLUETOOTH, bluetoothPermissionState.allPermissionsGranted)
     }
 
     Column(
@@ -158,71 +105,26 @@ fun PermissionScreen(permissionScreenViewModel: PermissionScreenViewModel = hilt
 
         PermissionScreenTitle()
 
-
         Spacer(modifier = Modifier.height(20.dp))
 
         OnBoardingScreenHeadlineDescription("LIFTRR needs a few permissions to work properly")
 
         Spacer(modifier = Modifier.height(32.dp))
 
-
-        PermissionsList(cameraPermissionState, locationPermissionState, bluetoothPermissionState)
+        PermissionsList(cameraPermissionState)
 
         Spacer(modifier = Modifier.weight(1f))
 
-
-        ElevatedButton(onClick = onContinueClicked,
+        ElevatedButton(
+            onClick = onContinueClicked,
             shape = RoundedCornerShape(16.dp),
-            enabled = state.value.bluetoothGranted && state.value.locationGranted && state.value.cameraGranted,
+            enabled = state.value.cameraGranted,
             colors = ButtonDefaults.buttonColors(
-                containerColor = MaterialTheme.colorScheme.primary),
-            modifier = Modifier
-                .fillMaxWidth()) {
-            Text("Continue", modifier = Modifier.padding(10.dp))
-        }
-
-        Spacer(modifier = Modifier.height(12.dp))
-
-        // Determine if button should be enabled
-        val allPermissionsGranted = allPermissionsState.allPermissionsGranted
-        val buttonEnabled = if (hasAttemptedPermissionRequest) {
-            // After attempting, only enable if all permissions are granted
-            allPermissionsGranted
-        } else {
-            // Before attempting, always enable
-            true
-        }
-
-        FilledTonalButton(
-            onClick = {
-                if (allPermissionsGranted) {
-                    // All permissions already granted, proceed to next screen
-                    onContinueClicked()
-                } else {
-                    // Request permissions
-                    hasAttemptedPermissionRequest = true
-                    allPermissionsState.launchMultiplePermissionRequest()
-                }
-            },
-            enabled = buttonEnabled,
+                containerColor = MaterialTheme.colorScheme.primary
+            ),
             modifier = Modifier.fillMaxWidth()
         ) {
-            Text(
-                text = if (allPermissionsGranted) "Continue" else "Grant All Permissions",
-                modifier = Modifier.padding(10.dp)
-            )
-        }
-
-        // Show hint when permissions are denied after request
-        if (hasAttemptedPermissionRequest && !allPermissionsGranted) {
-            Spacer(modifier = Modifier.height(8.dp))
-            Text(
-                text = "Please grant permissions individually above to continue",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                textAlign = TextAlign.Center,
-                modifier = Modifier.fillMaxWidth()
-            )
+            Text("Continue", modifier = Modifier.padding(10.dp))
         }
     }
 }
@@ -230,9 +132,7 @@ fun PermissionScreen(permissionScreenViewModel: PermissionScreenViewModel = hilt
 @OptIn(ExperimentalPermissionsApi::class)
 @Composable
 private fun PermissionsList(
-    cameraPermissionState: PermissionState,
-    locationPermissionState: PermissionState,
-    bluetoothPermissionState: MultiplePermissionsState
+    cameraPermissionState: PermissionState
 ) {
     LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         items(permissions) { permission ->
@@ -244,26 +144,6 @@ private fun PermissionsList(
                         status is PermissionStatus.Denied && status.shouldShowRationale
                     ) {
                         cameraPermissionState.launchPermissionRequest()
-                    }
-                }
-
-                PermissionId.LOCATION -> {
-                    val status =
-                        locationPermissionState.status
-                    Triple(
-                        status.isGranted,
-                        status is PermissionStatus.Denied && status.shouldShowRationale
-                    ) {
-                        locationPermissionState.launchPermissionRequest()
-                    }
-                }
-
-                PermissionId.BLUETOOTH -> {
-                    Triple(
-                        bluetoothPermissionState.allPermissionsGranted,
-                        bluetoothPermissionState.shouldShowRationale
-                    ) {
-                        bluetoothPermissionState.launchMultiplePermissionRequest()
                     }
                 }
             }
@@ -356,8 +236,6 @@ fun PermissionScreenTitle() {
 @Composable
 fun PermissionScreenPreview() {
     LiftrrTheme {
-        // As this screen uses permission states that require a real Activity,
-        // the preview may not fully function but should render the basic layout.
         PermissionScreen()
     }
 }

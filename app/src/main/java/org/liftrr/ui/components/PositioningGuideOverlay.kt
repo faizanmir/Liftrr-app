@@ -16,7 +16,7 @@ import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.unit.dp
-import org.liftrr.ml.ExerciseType
+import org.liftrr.domain.workout.ExerciseType
 
 /**
  * Semi-transparent positioning guide overlay that shows a target zone

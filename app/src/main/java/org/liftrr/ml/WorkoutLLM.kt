@@ -11,6 +11,7 @@ import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import org.liftrr.domain.analytics.WorkoutReport
+import org.liftrr.domain.workout.ExerciseType
 import org.liftrr.domain.workout.RepData
 import javax.inject.Inject
 import javax.inject.Singleton

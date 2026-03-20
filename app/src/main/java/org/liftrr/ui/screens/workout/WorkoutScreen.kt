@@ -15,7 +15,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
@@ -59,23 +58,20 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import org.liftrr.domain.analytics.WorkoutReport
 import org.liftrr.domain.workout.RepData
-import org.liftrr.ml.ExerciseType
+import org.liftrr.domain.workout.ExerciseType
 import org.liftrr.ml.FramingFeedback
 import org.liftrr.ml.PoseDetectionResult
 import org.liftrr.ui.components.PoseCameraWithRecording
 import org.liftrr.ui.components.PoseSkeletonOverlay
 import org.liftrr.ui.components.PositioningGuideOverlay
-import org.liftrr.ui.screens.session.WorkoutMode
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun WorkoutScreen(
-    workoutMode: WorkoutMode = WorkoutMode.SENSOR_AND_CAMERA,
     exerciseType: ExerciseType = ExerciseType.SQUAT,
-    weight: Float? = null,
     onNavigateBack: () -> Unit = {},
     onWorkoutComplete: (WorkoutReport) -> Unit = {},
     viewModel: WorkoutViewModel = hiltViewModel()
@@ -105,11 +101,12 @@ fun WorkoutScreen(
         showPositioningGuide = false
     }
 
-    // Set exercise type and weight when screen loads
-    LaunchedEffect(exerciseType, weight) {
-        viewModel.setExerciseType(exerciseType)
-        weight?.let { viewModel.setWeight(it) }
+    // Set exercise type when screen loads — weight is fetched from DB inside the VM
+    LaunchedEffect(exerciseType) {
+        viewModel.setExerciseTypeAndGetSavedWeight(exerciseType)
     }
+
+
 
     // Pre-initialize pose detector to minimize delay when recording starts
     LaunchedEffect(Unit) {
@@ -133,10 +130,7 @@ fun WorkoutScreen(
             TopAppBar(
                 title = {
                 Text(
-                    text = when (workoutMode) {
-                        WorkoutMode.SENSOR_AND_CAMERA -> "Workout - Sensor + Camera"
-                        WorkoutMode.CAMERA_ONLY -> "Workout - Camera Only"
-                    }
+                    text = "Workout - Camera Only"
                 )
             }, navigationIcon = {
                 IconButton(onClick = onNavigateBack) {
@@ -167,7 +161,7 @@ fun WorkoutScreen(
                 }, onRecordingError = { error ->
                     // Handle recording error
                     // TODO: Show error to user
-                }, cameraSelector = cameraSelector, dispatchers = viewModel.dispatchers, modifier = Modifier.fillMaxSize()
+                }, cameraSelector = cameraSelector, modifier = Modifier.fillMaxSize()
                 )
             }
 

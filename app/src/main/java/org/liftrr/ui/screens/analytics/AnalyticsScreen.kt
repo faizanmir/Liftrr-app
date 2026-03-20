@@ -58,7 +58,7 @@ import ir.ehsannarmani.compose_charts.models.AnimationMode
 import ir.ehsannarmani.compose_charts.models.Bars
 import ir.ehsannarmani.compose_charts.models.DrawStyle
 import ir.ehsannarmani.compose_charts.models.Line
-import org.liftrr.ml.ExerciseType
+import org.liftrr.domain.workout.ExerciseType
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable

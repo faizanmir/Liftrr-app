@@ -13,8 +13,10 @@ import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import org.liftrr.domain.weight.UserWeight
+import org.liftrr.domain.weight.UserWeightRepository
 import org.liftrr.ml.CameraAngle
-import org.liftrr.ml.ExerciseType
+import org.liftrr.domain.workout.ExerciseType
 import org.liftrr.ml.FramingFeedback
 import org.liftrr.ml.LightingQuality
 import org.liftrr.ml.PoseDetectionResult
@@ -46,7 +48,8 @@ data class ReadinessState(
 @HiltViewModel
 class CameraReadinessViewModel @Inject constructor(
     private val poseDetector: PoseDetector,
-    val dispatchers: DispatcherProvider
+    private val dispatchers: DispatcherProvider,
+    private val userWeightRepository: UserWeightRepository
 ) : ViewModel() {
 
     private val _readinessState = MutableStateFlow(ReadinessState())
@@ -58,8 +61,28 @@ class CameraReadinessViewModel @Inject constructor(
     private var exerciseType: ExerciseType = ExerciseType.SQUAT
     private var collectionJob: Job? = null
 
+    private val _lastSavedWeight = MutableStateFlow(0f)
+    val lastSavedWeightState: StateFlow<Float> = _lastSavedWeight.asStateFlow()
+
+
     fun setExerciseType(type: ExerciseType) {
-        exerciseType = type
+        viewModelScope.launch {
+            exerciseType = type
+            _lastSavedWeight.update {
+                userWeightRepository.getUserWeight(type)?.weight ?: 0f
+            }
+        }
+    }
+
+    fun saveWeight(weight: Float) {
+        viewModelScope.launch {
+            val existing = userWeightRepository.getUserWeight(exerciseType)
+            if (existing != null) {
+                userWeightRepository.updateUserWeight(UserWeight(exerciseType, weight))
+            } else {
+                userWeightRepository.saveUserWeight(UserWeight(exerciseType, weight))
+            }
+        }
     }
 
     fun startReadinessCheck() {

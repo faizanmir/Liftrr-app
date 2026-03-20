@@ -1,9 +1,9 @@
 package org.liftrr.domain.analytics
 
 import org.liftrr.domain.workout.RepData
-import org.liftrr.ml.ExerciseType
+import org.liftrr.domain.workout.ExerciseType
 import org.liftrr.ml.PoseDetectionResult
-import org.liftrr.ui.screens.session.WorkoutMode
+import org.liftrr.domain.workout.WorkoutMode
 
 data class WorkoutSession(
     val id: String,

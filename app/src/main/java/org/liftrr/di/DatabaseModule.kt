@@ -10,9 +10,19 @@ import dagger.hilt.android.qualifiers.ApplicationContext
 import dagger.hilt.components.SingletonComponent
 import org.liftrr.data.local.DatabaseMigrations
 import org.liftrr.data.local.LiftrrDb
-import org.liftrr.data.local.UserDao
-import org.liftrr.data.repository.AuthRepository
-import org.liftrr.data.repository.LocalAuthRepository
+import org.liftrr.data.local.sync.SyncQueueDao
+import org.liftrr.data.local.user.UserDao
+import org.liftrr.data.local.user.UserProfileDao
+import org.liftrr.data.local.workout.WeightsDao
+import org.liftrr.data.local.workout.WorkoutDao
+import org.liftrr.domain.auth.AuthRepository
+import org.liftrr.data.repository.RemoteAuthRepository
+import org.liftrr.data.repository.UserProfileRepositoryImpl
+import org.liftrr.data.repository.UserWeightRepositoryImpl
+import org.liftrr.data.repository.WorkoutRepositoryImpl
+import org.liftrr.domain.user.UserProfileRepository
+import org.liftrr.domain.weight.UserWeightRepository
+import org.liftrr.domain.workout.WorkoutRepository
 import javax.inject.Singleton
 
 @InstallIn(SingletonComponent::class)
@@ -38,18 +48,22 @@ object DatabaseModule {
     }
 
     @Provides
-    fun provideWorkoutDao(database: LiftrrDb): org.liftrr.data.local.WorkoutDao {
+    fun provideWorkoutDao(database: LiftrrDb): WorkoutDao {
         return database.workoutDao()
     }
 
     @Provides
-    fun provideSyncQueueDao(database: LiftrrDb): org.liftrr.data.local.SyncQueueDao {
-        return database.syncQueueDao()
+    fun provideUserProfileDao(database: LiftrrDb): UserProfileDao {
+        return database.userProfileDao()
     }
 
     @Provides
-    fun provideUserPromptDao(database: LiftrrDb): org.liftrr.data.local.UserPromptDao {
-        return database.userPromptDao()
+    fun provideSyncQueueDao(database: LiftrrDb): SyncQueueDao {
+        return database.syncQueueDao()
+    }
+    @Provides
+    fun provideUserWeightsDao(database: LiftrrDb): WeightsDao {
+        return database.weightDao()
     }
 }
 
@@ -59,9 +73,17 @@ abstract class RepositoryModule {
 
     @Binds
     @Singleton
-    abstract fun bindAuthRepository(impl: LocalAuthRepository): AuthRepository
+    abstract fun bindAuthRepository(impl: RemoteAuthRepository): AuthRepository
 
     @Binds
     @Singleton
-    abstract fun bindWorkoutRepository(impl: org.liftrr.data.repository.WorkoutRepositoryImpl): org.liftrr.data.repository.WorkoutRepository
+    abstract fun bindWorkoutRepository(impl: WorkoutRepositoryImpl): WorkoutRepository
+
+    @Binds
+    @Singleton
+    abstract fun bindUserProfileRepository(impl: UserProfileRepositoryImpl): UserProfileRepository
+
+    @Binds
+    @Singleton
+    abstract fun bindUserWeightRepository(impl: UserWeightRepositoryImpl): UserWeightRepository
 }

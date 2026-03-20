@@ -10,7 +10,7 @@ class BenchPressExercise : Exercise {
     private var lastRepTime = 0L
     private var frameStabilityCount = 0
 
-    private val elbowSmoother = AngleSmoother(5)
+    private val elbowSmoother = AngleSmoother(3)
 
     // Rep Tracking Metrics
     private var repMinElbowAngle = 180f
@@ -25,8 +25,8 @@ class BenchPressExercise : Exercise {
         private const val FLARE_LIMIT_HIGH = 80f      // Dangerous shoulder stress (T-pose)
         private const val FLARE_LIMIT_LOW = 30f       // Too tucked
 
-        private const val MIN_REP_DURATION = 1100L
-        private const val STABILITY_FRAMES = 3
+        private const val MIN_REP_DURATION = 700L
+        private const val STABILITY_FRAMES = 2
     }
 
     override fun updateRepCount(pose: PoseDetectionResult.Success): Boolean {
@@ -60,6 +60,8 @@ class BenchPressExercise : Exercise {
                         currentState = State.BOTTOM
                         frameStabilityCount = 0
                     }
+                } else {
+                    frameStabilityCount = 0 // Reset when not in position
                 }
                 false
             }

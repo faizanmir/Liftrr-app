@@ -9,8 +9,6 @@ import javax.inject.Inject
 
 data class PermissionsUiState(
     val cameraGranted: Boolean = false,
-    val locationGranted: Boolean = false,
-    val bluetoothGranted: Boolean = false,
 )
 
 @HiltViewModel
@@ -23,8 +21,6 @@ class PermissionScreenViewModel @Inject constructor() : ViewModel() {
         _uiState.update { currentState ->
             when (permission) {
                 PermissionId.CAMERA -> currentState.copy(cameraGranted = isGranted)
-                PermissionId.LOCATION -> currentState.copy(locationGranted = isGranted)
-                PermissionId.BLUETOOTH -> currentState.copy(bluetoothGranted = isGranted)
             }
         }
     }

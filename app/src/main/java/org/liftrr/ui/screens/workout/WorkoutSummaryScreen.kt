@@ -61,10 +61,6 @@ import org.liftrr.domain.analytics.RepAnalysis
 import org.liftrr.domain.analytics.SymmetryAnalysis
 import org.liftrr.domain.analytics.TempoAnalysis
 import org.liftrr.domain.analytics.WorkoutReport
-import org.liftrr.ml.ExerciseType
-import org.liftrr.ui.screens.profile.CheckForPromptAfterWorkout
-import org.liftrr.ui.screens.profile.ProgressiveProfilePromptContainer
-import org.liftrr.data.models.PromptType
 import kotlin.math.roundToInt
 
 /**
@@ -79,25 +75,17 @@ fun WorkoutSummaryScreen(
     modifier: Modifier = Modifier,
     viewModel: WorkoutSummaryViewModel = hiltViewModel()
 ) {
-    val aiSummary by viewModel.aiSummary.collectAsState()
-    val aiRecommendations by viewModel.aiRecommendations.collectAsState()
-    val motivationalMessage by viewModel.motivationalMessage.collectAsState()
-    val isInitializing by viewModel.isInitializing.collectAsState()
-    val isExporting by viewModel.isExporting.collectAsState()
+    val uiState by viewModel.uiState.collectAsState()
 
     // System back should go to Home (same as toolbar back)
     BackHandler { onNavigateBack() }
 
-    // Generate AI insights when screen loads (after initialization)
-    LaunchedEffect(report, isInitializing) {
-        if (!isInitializing) {
-            viewModel.generateInsights(report)
-        }
+    // Generate AI insights once when the report is available — VM handles initialization sequencing
+    LaunchedEffect(report) {
+        viewModel.generateInsights(report)
     }
     var showShareMenu by remember { mutableStateOf(false) }
 
-    // Check for progressive profile prompts after workout
-    CheckForPromptAfterWorkout()
 
     Box(modifier = Modifier.fillMaxSize()) {
         Scaffold(
@@ -181,8 +169,8 @@ fun WorkoutSummaryScreen(
             // AI Summary Section
             item {
                 AISummarySection(
-                    state = aiSummary,
-                    motivationalMessage = motivationalMessage,
+                    state = uiState.aiSummary,
+                    motivationalMessage = uiState.motivationalMessage,
                     onRetry = { viewModel.retryInsights(report) }
                 )
             }
@@ -190,7 +178,7 @@ fun WorkoutSummaryScreen(
             // AI Recommendations Section
             item {
                 AIRecommendationsSection(
-                    state = aiRecommendations,
+                    state = uiState.aiRecommendations,
                     onRetry = { viewModel.retryInsights(report) }
                 )
             }
@@ -273,12 +261,12 @@ fun WorkoutSummaryScreen(
     }
 
         // Full-screen loading overlay while LLM is initializing
-        if (isInitializing) {
+        if (uiState.isInitializing) {
             LLMInitializingOverlay()
         }
 
         // Loading overlay while exporting report
-        if (isExporting) {
+        if (uiState.isExporting) {
             Box(
                 modifier = Modifier
                     .fillMaxSize()
@@ -299,11 +287,6 @@ fun WorkoutSummaryScreen(
             }
         }
     }
-
-    // Progressive profile prompt container
-    ProgressiveProfilePromptContainer(
-        onStartOnboardingFlow = onNavigateToOnboarding
-    )
 }
 
 @Composable
@@ -948,8 +931,7 @@ private fun BenchPressMetricsCard(metrics: ExerciseSpecificMetrics.BenchPressMet
 
 @Composable
 private fun VelocityProfileSection(report: WorkoutReport) {
-    // Generate velocity data from rep analyses
-    val velocityData = generateVelocityDataFromReport(report)
+    val velocityData = remember(report) { generateVelocityDataFromReport(report) }
 
     if (velocityData.isEmpty()) return
 
@@ -992,15 +974,11 @@ private fun VelocityCurveChart(
     val primaryColor = MaterialTheme.colorScheme.primary
     val tertiaryColor = MaterialTheme.colorScheme.tertiary
 
-    // Convert velocity data to chart format
-    val lines = mutableListOf<Line>()
-
-    velocityData.forEachIndexed { repIndex, repData ->
-        val midPoint = repData.size / 2
-
-        // Concentric phase (first half)
-        lines.add(
-            Line(
+    val lines = remember(velocityData, primaryColor, tertiaryColor) {
+        val list = mutableListOf<Line>()
+        velocityData.forEachIndexed { repIndex, repData ->
+            val midPoint = repData.size / 2
+            list.add(Line(
                 label = "Rep ${repIndex + 1} Concentric",
                 values = repData.subList(0, midPoint).map { it.toDouble() },
                 color = SolidColor(primaryColor),
@@ -1009,12 +987,8 @@ private fun VelocityCurveChart(
                 secondGradientFillColor = Color.Transparent,
                 drawStyle = DrawStyle.Stroke(width = 3.dp),
                 curvedEdges = true
-            )
-        )
-
-        // Eccentric phase (second half)
-        lines.add(
-            Line(
+            ))
+            list.add(Line(
                 label = "Rep ${repIndex + 1} Eccentric",
                 values = repData.subList(midPoint, repData.size).map { it.toDouble() },
                 color = SolidColor(tertiaryColor),
@@ -1023,8 +997,9 @@ private fun VelocityCurveChart(
                 secondGradientFillColor = Color.Transparent,
                 drawStyle = DrawStyle.Stroke(width = 3.dp),
                 curvedEdges = true
-            )
-        )
+            ))
+        }
+        list
     }
 
     LineChart(

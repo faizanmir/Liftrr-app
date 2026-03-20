@@ -1,6 +1,6 @@
 package org.liftrr.domain.analytics
 
-import org.liftrr.ml.ExerciseType
+import org.liftrr.domain.workout.ExerciseType
 
 object ExerciseAnalyzerFactory {
     fun create(exerciseType: ExerciseType): ExerciseSpecificAnalyzer {

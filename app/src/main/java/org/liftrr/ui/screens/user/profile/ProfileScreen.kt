@@ -88,35 +88,24 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import coil3.compose.AsyncImage
 import coil3.request.ImageRequest
 import coil3.request.crossfade
-import org.liftrr.data.models.AuthProvider
-import org.liftrr.data.models.UserDto
-import org.liftrr.ui.screens.profile.ProgressiveProfilePromptContainer
-import org.liftrr.ui.screens.profile.ProgressiveProfileViewModel
+import org.liftrr.domain.user.AuthProvider
+import org.liftrr.domain.user.User
 import org.liftrr.ui.theme.LiftrrTheme
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ProfileScreen(
     viewModel: ProfileViewModel = hiltViewModel(),
-    progressiveProfileViewModel: ProgressiveProfileViewModel = hiltViewModel(),
     onNavigateBack: () -> Unit = {},
     onLoginClick: () -> Unit = {},
     onNavigateToOnboarding: (Boolean) -> Unit = {}
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val logoutState by viewModel.logoutState.collectAsState()
-    val progressiveProfileState by progressiveProfileViewModel.state.collectAsState()
 
     var showLogoutDialog by remember { mutableStateOf(false) }
     val snackbarHostState = remember { SnackbarHostState() }
 
-    // Show snackbar for error messages
-    LaunchedEffect(progressiveProfileState.errorMessage) {
-        progressiveProfileState.errorMessage?.let { message ->
-            snackbarHostState.showSnackbar(message)
-            progressiveProfileViewModel.clearError()
-        }
-    }
 
     // Refresh profile when returning from auth screen
     LaunchedEffect(Unit) {
@@ -175,10 +164,8 @@ fun ProfileScreen(
                     user = state.user,
                     isDarkMode = state.isDarkMode,
                     isDynamicColorEnabled = state.isDynamicColorEnabled,
-                    profileCompleteness = progressiveProfileState.profileCompleteness,
                     onDarkModeToggle = viewModel::toggleDarkMode,
                     onDynamicColorToggle = viewModel::toggleDynamicColor,
-                    onCompleteProfileClick = { onNavigateToOnboarding(false) },
                     onEditProfileClick = { onNavigateToOnboarding(true) },
                     onLogoutClick = { showLogoutDialog = true },
                     modifier = Modifier.padding(padding)
@@ -224,22 +211,15 @@ fun ProfileScreen(
         }
     }
 
-    // Progressive profile prompt container
-    ProgressiveProfilePromptContainer(
-        viewModel = progressiveProfileViewModel,
-        onStartOnboardingFlow = { onNavigateToOnboarding(false) }
-    )
 }
 
 @Composable
 private fun ProfileContent(
-    user: UserDto,
+    user: User,
     isDarkMode: Boolean,
     isDynamicColorEnabled: Boolean,
-    profileCompleteness: org.liftrr.data.models.ProfileCompleteness,
     onDarkModeToggle: (Boolean) -> Unit,
     onDynamicColorToggle: (Boolean) -> Unit,
-    onCompleteProfileClick: () -> Unit,
     onEditProfileClick: () -> Unit,
     onLogoutClick: () -> Unit,
     modifier: Modifier = Modifier
@@ -264,150 +244,149 @@ private fun ProfileContent(
         Spacer(modifier = Modifier.height(24.dp))
 
         // Profile Completeness Card - only show if profile is incomplete
-        if (!profileCompleteness.isComplete) {
-            ProfileCompletenessCard(
-                profileCompleteness = profileCompleteness,
-                onCompleteClick = onCompleteProfileClick,
-                onEditClick = onEditProfileClick,
-                modifier = Modifier.padding(horizontal = 16.dp)
-            )
-
-            Spacer(modifier = Modifier.height(16.dp))
-        }
-
-        // Appearance Section
-        SettingsSection(title = "Appearance") {
-            SettingItemWithSwitch(
-                icon = if (isDarkMode) Icons.Filled.DarkMode else Icons.Outlined.LightMode,
-                title = "Dark Mode",
-                description = "Switch between light and dark theme",
-                checked = isDarkMode,
-                onCheckedChange = onDarkModeToggle
-            )
-
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                HorizontalDivider(
-                    modifier = Modifier.padding(horizontal = 16.dp),
-                    color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
-                )
-
-                SettingItemWithSwitch(
-                    icon = Icons.Outlined.Palette,
-                    title = "Dynamic Colors",
-                    description = "Use colors from your wallpaper",
-                    checked = isDynamicColorEnabled,
-                    onCheckedChange = onDynamicColorToggle
-                )
-            }
-        }
+//        if (!profileCompleteness.isComplete) {
+//            ProfileCompletenessCard(
+//                profileCompleteness = profileCompleteness,
+//                onCompleteClick = onCompleteProfileClick,
+//                onEditClick = onEditProfileClick,
+//                modifier = Modifier.padding(horizontal = 16.dp)
+//            )
 
         Spacer(modifier = Modifier.height(16.dp))
+    }
 
-        // Account Section
-        SettingsSection(title = "Account") {
-            SettingItem(
-                icon = Icons.Outlined.Person,
-                title = "Edit Profile",
-                description = "Update your personal information",
-                onClick = onEditProfileClick
-            )
-
-            HorizontalDivider(
-                modifier = Modifier.padding(horizontal = 16.dp),
-                color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
-            )
-
-            SettingItem(
-                icon = Icons.Outlined.Lock,
-                title = "Change Password",
-                description = "Update your password",
-                onClick = { /* TODO: Navigate to change password */ },
-                enabled = user.authProvider == AuthProvider.EMAIL_PASSWORD
-            )
-
-            HorizontalDivider(
-                modifier = Modifier.padding(horizontal = 16.dp),
-                color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
-            )
-
-            SettingItem(
-                icon = Icons.Outlined.Notifications,
-                title = "Notifications",
-                description = "Manage notification preferences",
-                onClick = { /* TODO: Navigate to notifications */ }
-            )
-        }
-
-        Spacer(modifier = Modifier.height(16.dp))
-
-        // Data & Privacy Section
-        SettingsSection(title = "Data & Privacy") {
-            SettingItem(
-                icon = Icons.Outlined.CloudUpload,
-                title = "Backup & Sync",
-                description = "Backup your workout data",
-                onClick = { /* TODO: Navigate to backup */ }
-            )
-
-            HorizontalDivider(
-                modifier = Modifier.padding(horizontal = 16.dp),
-                color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
-            )
-
-            SettingItem(
-                icon = Icons.Outlined.Download,
-                title = "Export Data",
-                description = "Download your workout history",
-                onClick = { /* TODO: Export data */ }
-            )
-        }
-
-        Spacer(modifier = Modifier.height(16.dp))
-
-        // About Section
-        SettingsSection(title = "About") {
-            SettingItem(
-                icon = Icons.Outlined.Info,
-                title = "About Liftrr",
-                description = "Version 1.0.0",
-                onClick = { /* TODO: Show about */ }
-            )
-
-            HorizontalDivider(
-                modifier = Modifier.padding(horizontal = 16.dp),
-                color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
-            )
-
-            SettingItem(
-                icon = Icons.Outlined.Description,
-                title = "Terms & Privacy",
-                description = "Legal information",
-                onClick = { /* TODO: Show terms */ }
-            )
-
-            HorizontalDivider(
-                modifier = Modifier.padding(horizontal = 16.dp),
-                color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
-            )
-
-            SettingItem(
-                icon = Icons.Outlined.Help,
-                title = "Help & Support",
-                description = "Get help with the app",
-                onClick = { /* TODO: Show help */ }
-            )
-        }
-
-        Spacer(modifier = Modifier.height(16.dp))
-
-        // Logout Button
-        LogoutButton(
-            onClick = onLogoutClick,
-            modifier = Modifier.padding(horizontal = 16.dp)
+    // Appearance Section
+    SettingsSection(title = "Appearance") {
+        SettingItemWithSwitch(
+            icon = if (isDarkMode) Icons.Filled.DarkMode else Icons.Outlined.LightMode,
+            title = "Dark Mode",
+            description = "Switch between light and dark theme",
+            checked = isDarkMode,
+            onCheckedChange = onDarkModeToggle
         )
 
-        Spacer(modifier = Modifier.height(24.dp))
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            HorizontalDivider(
+                modifier = Modifier.padding(horizontal = 16.dp),
+                color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+            )
+
+            SettingItemWithSwitch(
+                icon = Icons.Outlined.Palette,
+                title = "Dynamic Colors",
+                description = "Use colors from your wallpaper",
+                checked = isDynamicColorEnabled,
+                onCheckedChange = onDynamicColorToggle
+            )
+        }
     }
+
+    Spacer(modifier = Modifier.height(16.dp))
+
+    // Account Section
+    SettingsSection(title = "Account") {
+        SettingItem(
+            icon = Icons.Outlined.Person,
+            title = "Edit Profile",
+            description = "Update your personal information",
+            onClick = onEditProfileClick
+        )
+
+        HorizontalDivider(
+            modifier = Modifier.padding(horizontal = 16.dp),
+            color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+        )
+
+        SettingItem(
+            icon = Icons.Outlined.Lock,
+            title = "Change Password",
+            description = "Update your password",
+            onClick = { /* TODO: Navigate to change password */ },
+            enabled = user.authProvider == AuthProvider.EMAIL_PASSWORD
+        )
+
+        HorizontalDivider(
+            modifier = Modifier.padding(horizontal = 16.dp),
+            color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+        )
+
+        SettingItem(
+            icon = Icons.Outlined.Notifications,
+            title = "Notifications",
+            description = "Manage notification preferences",
+            onClick = { /* TODO: Navigate to notifications */ }
+        )
+    }
+
+    Spacer(modifier = Modifier.height(16.dp))
+
+    // Data & Privacy Section
+    SettingsSection(title = "Data & Privacy") {
+        SettingItem(
+            icon = Icons.Outlined.CloudUpload,
+            title = "Backup & Sync",
+            description = "Backup your workout data",
+            onClick = { /* TODO: Navigate to backup */ }
+        )
+
+        HorizontalDivider(
+            modifier = Modifier.padding(horizontal = 16.dp),
+            color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+        )
+
+        SettingItem(
+            icon = Icons.Outlined.Download,
+            title = "Export Data",
+            description = "Download your workout history",
+            onClick = { /* TODO: Export data */ }
+        )
+    }
+
+    Spacer(modifier = Modifier.height(16.dp))
+
+    // About Section
+    SettingsSection(title = "About") {
+        SettingItem(
+            icon = Icons.Outlined.Info,
+            title = "About Liftrr",
+            description = "Version 1.0.0",
+            onClick = { /* TODO: Show about */ }
+        )
+
+        HorizontalDivider(
+            modifier = Modifier.padding(horizontal = 16.dp),
+            color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+        )
+
+        SettingItem(
+            icon = Icons.Outlined.Description,
+            title = "Terms & Privacy",
+            description = "Legal information",
+            onClick = { /* TODO: Show terms */ }
+        )
+
+        HorizontalDivider(
+            modifier = Modifier.padding(horizontal = 16.dp),
+            color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+        )
+
+        SettingItem(
+            icon = Icons.Outlined.Help,
+            title = "Help & Support",
+            description = "Get help with the app",
+            onClick = { /* TODO: Show help */ }
+        )
+    }
+
+    Spacer(modifier = Modifier.height(16.dp))
+
+    // Logout Button
+    LogoutButton(
+        onClick = onLogoutClick,
+        modifier = Modifier.padding(horizontal = 16.dp)
+    )
+
+    Spacer(modifier = Modifier.height(24.dp))
 }
 
 @Composable
@@ -567,7 +546,7 @@ private fun GuestProfileContent(
 
 @Composable
 private fun ProfileHeader(
-    user: UserDto,
+    user: User,
     modifier: Modifier = Modifier
 ) {
     val gradient = Brush.linearGradient(
@@ -933,16 +912,20 @@ private fun LogoutConfirmationDialog(
     )
 }
 
+@Suppress("unused")
 @Composable
 private fun ProfileCompletenessCard(
-    profileCompleteness: org.liftrr.data.models.ProfileCompleteness,
+    completeness: Float,
+    isComplete: Boolean,
+    percentageString: String,
+    hasFitnessLevel: Boolean,
+    hasGoals: Boolean,
+    hasBodyStats: Boolean,
+    hasProfilePhoto: Boolean,
     onCompleteClick: () -> Unit,
     onEditClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val completeness = profileCompleteness.completeness
-    val isComplete = profileCompleteness.isComplete
-
     Card(
         modifier = modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(
@@ -992,7 +975,7 @@ private fun ProfileCompletenessCard(
                             }
                         )
                         Text(
-                            text = profileCompleteness.percentageString,
+                            text = percentageString,
                             style = MaterialTheme.typography.bodyMedium,
                             color = if (isComplete) {
                                 MaterialTheme.colorScheme.onTertiaryContainer.copy(alpha = 0.7f)
@@ -1033,10 +1016,10 @@ private fun ProfileCompletenessCard(
                     )
 
                     val missingFields = mutableListOf<String>()
-                    if (!profileCompleteness.hasFitnessLevel) missingFields.add("Fitness Level")
-                    if (!profileCompleteness.hasGoals) missingFields.add("Goals")
-                    if (!profileCompleteness.hasBodyStats) missingFields.add("Body Stats")
-                    if (!profileCompleteness.hasProfilePhoto) missingFields.add("Profile Photo")
+                    if (!hasFitnessLevel) missingFields.add("Fitness Level")
+                    if (!hasGoals) missingFields.add("Goals")
+                    if (!hasBodyStats) missingFields.add("Body Stats")
+                    if (!hasProfilePhoto) missingFields.add("Profile Photo")
 
                     if (missingFields.isNotEmpty()) {
                         val missingText = missingFields.take(3).joinToString(", ")
@@ -1128,12 +1111,11 @@ private fun getInitials(firstName: String?, lastName: String?): String {
 private fun ProfileScreenPreview() {
     LiftrrTheme {
         ProfileContent(
-            user = UserDto(
+            user = User(
                 userId = "123",
                 firstName = "John",
                 lastName = "Doe",
                 email = "john.doe@example.com",
-                passwordHash = null,
                 authProvider = AuthProvider.GOOGLE,
                 photoUrl = null,
                 createdAt = System.currentTimeMillis(),
@@ -1141,14 +1123,8 @@ private fun ProfileScreenPreview() {
             ),
             isDarkMode = false,
             isDynamicColorEnabled = true,
-            profileCompleteness = org.liftrr.data.models.ProfileCompleteness(
-                hasFitnessLevel = true,
-                hasGoals = false,
-                hasBodyStats = false
-            ),
             onDarkModeToggle = {},
             onDynamicColorToggle = {},
-            onCompleteProfileClick = {},
             onEditProfileClick = {},
             onLogoutClick = {}
         )

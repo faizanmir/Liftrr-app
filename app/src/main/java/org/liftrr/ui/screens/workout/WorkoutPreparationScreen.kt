@@ -22,6 +22,8 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
@@ -34,37 +36,33 @@ import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
-import org.liftrr.ml.ExerciseType
+import org.liftrr.domain.workout.ExerciseType
 import org.liftrr.ui.components.PoseCameraWithRecording
 import org.liftrr.ui.components.PoseSkeletonOverlay
-import org.liftrr.ui.screens.session.WorkoutMode
+import org.liftrr.domain.workout.WorkoutMode
 
-private val android.content.Context.weightDataStore by preferencesDataStore(name = "workout_weight")
-private val LAST_WEIGHT_KEY = floatPreferencesKey("last_weight")
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun WorkoutPreparationScreen(
-    workoutMode: WorkoutMode,
     exerciseType: ExerciseType,
     onNavigateBack: () -> Unit = {},
     onStartRecording: (Float?) -> Unit = {},
     viewModel: CameraReadinessViewModel = hiltViewModel()
 ) {
-    val context = LocalContext.current
-    val scope = rememberCoroutineScope()
     val readinessState by viewModel.readinessState.collectAsState()
     val latestPose by viewModel.latestPose.collectAsState()
 
     var weightText by remember { mutableStateOf("") }
     var showWarningDialog by remember { mutableStateOf(false) }
 
-    // Load last used weight
-    LaunchedEffect(Unit) {
-        val lastWeight = context.weightDataStore.data.map { prefs ->
-            prefs[LAST_WEIGHT_KEY]
-        }.first()
-        lastWeight?.let { weightText = it.toString() }
+    val lastSavedWeight by viewModel.lastSavedWeightState.collectAsState()
+
+    // Pre-populate the weight field once the saved weight loads
+    LaunchedEffect(lastSavedWeight) {
+        if (lastSavedWeight > 0f && weightText.isEmpty()) {
+            weightText = lastSavedWeight.toString()
+        }
     }
 
     // Start readiness check
@@ -79,13 +77,7 @@ fun WorkoutPreparationScreen(
 
     val startWorkout: () -> Unit = {
         val weight = weightText.toFloatOrNull()
-        if (weight != null && weight > 0) {
-            scope.launch {
-                context.weightDataStore.edit { prefs ->
-                    prefs[LAST_WEIGHT_KEY] = weight
-                }
-            }
-        }
+        if (weight != null && weight > 0f) viewModel.saveWeight(weight)
         onStartRecording(weight)
     }
 
@@ -123,7 +115,6 @@ fun WorkoutPreparationScreen(
                     },
                     isRecording = false,
                     cameraSelector = CameraSelector.DEFAULT_BACK_CAMERA,
-                    dispatchers = viewModel.dispatchers,
                     modifier = Modifier.fillMaxSize()
                 )
 
@@ -139,10 +130,10 @@ fun WorkoutPreparationScreen(
                     modifier = Modifier
                         .fillMaxSize()
                         .background(
-                            androidx.compose.ui.graphics.Brush.verticalGradient(
+                            Brush.verticalGradient(
                                 colors = listOf(
-                                    androidx.compose.ui.graphics.Color.Transparent,
-                                    androidx.compose.ui.graphics.Color.Black.copy(alpha = 0.5f)
+                                    Color.Transparent,
+                                    Color.Black.copy(alpha = 0.5f)
                                 ),
                                 startY = 0.5f
                             )
@@ -189,10 +180,9 @@ fun WorkoutPreparationScreen(
             ) {
                 // Compact workout details
                 WorkoutDetailsCard(
-                    workoutMode = workoutMode,
                     exerciseType = exerciseType,
                     weightText = weightText,
-                    onWeightChange = { weightText = it }
+                    onWeightChange = { weightText = it },
                 )
 
                 Spacer(modifier = Modifier.weight(1f))
@@ -362,7 +352,6 @@ private fun ReadinessWarningDialog(
 
 @Composable
 private fun WorkoutDetailsCard(
-    workoutMode: WorkoutMode,
     exerciseType: ExerciseType,
     weightText: String,
     onWeightChange: (String) -> Unit
@@ -426,10 +415,7 @@ private fun WorkoutDetailsCard(
                         color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f)
                     )
                     Text(
-                        text = when (workoutMode) {
-                            WorkoutMode.SENSOR_AND_CAMERA -> "Sensor + Camera"
-                            WorkoutMode.CAMERA_ONLY -> "Camera Only"
-                        },
+                        text = "Camera Only",
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.SemiBold,
                         color = MaterialTheme.colorScheme.onPrimaryContainer

@@ -1,6 +1,7 @@
 package org.liftrr.ml
 
 import androidx.compose.ui.graphics.Color
+import org.liftrr.domain.pose.PoseLandmarks
 
 object PoseConnections {
 

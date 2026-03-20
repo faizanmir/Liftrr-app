@@ -8,16 +8,16 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
-import org.liftrr.data.models.UserDto
-import org.liftrr.data.preferences.ThemePreferences
-import org.liftrr.data.repository.AuthRepository
+import org.liftrr.data.local.preferences.ThemePreferences
+import org.liftrr.domain.auth.AuthRepository
+import org.liftrr.domain.user.User
 import org.liftrr.utils.DispatcherProvider
 import javax.inject.Inject
 
 sealed class ProfileUiState {
     data object Loading : ProfileUiState()
     data class Success(
-        val user: UserDto,
+        val user: User,
         val isDarkMode: Boolean,
         val isDynamicColorEnabled: Boolean
     ) : ProfileUiState()

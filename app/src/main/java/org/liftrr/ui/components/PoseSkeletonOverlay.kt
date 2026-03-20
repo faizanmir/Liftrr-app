@@ -11,7 +11,7 @@ import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.unit.dp
 import com.google.mediapipe.tasks.components.containers.NormalizedLandmark
 import org.liftrr.ml.PoseDetectionResult
-import org.liftrr.ml.PoseLandmarks
+import org.liftrr.domain.pose.PoseLandmarks
 import org.liftrr.ml.isVisible
 
 /**

@@ -15,21 +15,21 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import com.google.gson.Gson
-import org.liftrr.data.models.RepDataDto
-import org.liftrr.data.models.WorkoutSessionEntity
-import org.liftrr.data.repository.WorkoutRepository
+import org.liftrr.data.models.dto.RepDataDto
+import org.liftrr.domain.workout.WorkoutRecord
+import org.liftrr.domain.weight.UserWeightRepository
+import org.liftrr.domain.workout.WorkoutRepository
 import org.liftrr.domain.analytics.WorkoutAnalyzer
 import org.liftrr.domain.analytics.WorkoutReport
-import org.liftrr.domain.analytics.WorkoutSession
 import org.liftrr.domain.workout.MovementPhase
 import org.liftrr.domain.workout.RepData
 import org.liftrr.domain.workout.WorkoutEngine
 import org.liftrr.domain.workout.WorkoutReportHolder
-import org.liftrr.ml.ExerciseType
+import org.liftrr.domain.workout.ExerciseType
 import org.liftrr.ml.PoseDetectionResult
 import org.liftrr.ml.PoseDetector
 import org.liftrr.ml.PoseQuality
-import org.liftrr.ui.screens.session.WorkoutMode
+import org.liftrr.domain.workout.WorkoutMode
 import org.liftrr.utils.DispatcherProvider
 import org.liftrr.utils.KeyFrameCapture
 import javax.inject.Inject
@@ -63,10 +63,11 @@ class WorkoutViewModel @Inject constructor(
     val poseDetector: PoseDetector,
     private val workoutReportHolder: WorkoutReportHolder,
     private val workoutRepository: WorkoutRepository,
+    private val userWeightRepository: UserWeightRepository,
     val dispatchers: DispatcherProvider
 ) : ViewModel() {
 
-    private val _uiState = MutableStateFlow(WorkoutUiState(mode = WorkoutMode.SENSOR_AND_CAMERA))
+    private val _uiState = MutableStateFlow(WorkoutUiState(mode = WorkoutMode.CAMERA_ONLY))
     val uiState: StateFlow<WorkoutUiState> = _uiState.asStateFlow()
 
     private val workoutEngine = WorkoutEngine()
@@ -108,7 +109,10 @@ class WorkoutViewModel @Inject constructor(
 
                 poseDetector.poseResults
                     .onEach { result ->
-                        // Move processing to Default dispatcher to keep UI responsive
+                        // Update skeleton pose on UI IMMEDIATELY for responsive overlay
+                        _uiState.update { it.copy(currentPose = result) }
+
+                        // Process workout logic on Default dispatcher
                         withContext(dispatchers.default) {
                             val workoutState = workoutEngine.processPoseResult(result)
                             val repStats = workoutEngine.getRepStats()
@@ -122,7 +126,6 @@ class WorkoutViewModel @Inject constructor(
 
                             // Capture Logic with Validity Check
                             if (result is PoseDetectionResult.Success && _uiState.value.isRecording) {
-                                // Performance: Only attempt capture if landmarks meet a confidence threshold
                                 if (workoutState.poseQualityScore > 0.4f) {
                                     capturePhaseFrameIfNeeded(
                                         result = result,
@@ -133,10 +136,9 @@ class WorkoutViewModel @Inject constructor(
                                 }
                             }
 
-                            // Batch update the UI state once per frame
+                            // Update workout stats (pose already updated above)
                             _uiState.update {
                                 it.copy(
-                                    currentPose = workoutState.currentPose,
                                     formFeedback = workoutState.formFeedback,
                                     poseQualityScore = workoutState.poseQualityScore,
                                     repCount = workoutState.repCount,
@@ -240,7 +242,7 @@ class WorkoutViewModel @Inject constructor(
 
             val keyFrames = keyFrameCapture.processAndSaveKeyFrames(session.id)
 
-            workoutRepository.saveWorkout(WorkoutSessionEntity(
+            workoutRepository.saveWorkout(WorkoutRecord(
                 sessionId = session.id,
                 exerciseType = report.exerciseType.name,
                 totalReps = report.totalReps,
@@ -278,11 +280,14 @@ class WorkoutViewModel @Inject constructor(
     }
 
     fun setVideoUri(uri: String) { videoUri = uri }
-    fun setWeight(w: Float) { weight = w }
-    fun getLastWorkoutReport(): WorkoutReport? = lastWorkoutReport
-    fun setExerciseType(exerciseType: ExerciseType) {
+
+
+    fun setExerciseTypeAndGetSavedWeight(exerciseType: ExerciseType) {
         workoutEngine.setExerciseType(exerciseType)
         _uiState.update { it.copy(exerciseType = exerciseType) }
+        viewModelScope.launch {
+            weight = userWeightRepository.getUserWeight(exerciseType)?.weight
+        }
     }
 
     fun stopPoseDetection() { _uiState.update { it.copy(isPoseDetectionInitializing = false) } }

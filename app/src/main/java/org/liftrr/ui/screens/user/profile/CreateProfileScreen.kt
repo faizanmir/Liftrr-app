@@ -23,7 +23,6 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Email
 import androidx.compose.material.icons.filled.Lock
-import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material3.Button
@@ -68,8 +67,6 @@ private const val TAG = "AuthScreen"
  */
 data class AuthFormState(
     val isSignUp: Boolean = true,
-    val firstName: String = "",
-    val lastName: String = "",
     val email: String = "",
     val password: String = "",
     val confirmPassword: String = "",
@@ -87,7 +84,6 @@ fun AuthenticationScreen(
     onSignInSuccess: () -> Unit,
     onSkip: () -> Unit,
     viewModel: AuthViewModel = hiltViewModel(),
-    onSignUpSuccess: () -> Boolean
 ) {
     val context = LocalContext.current
 
@@ -128,8 +124,8 @@ fun AuthenticationScreen(
         onSignIn = { email, password ->
             viewModel.signInWithEmailPassword(email, password)
         },
-        onSignUp = { email, password, firstName, lastName ->
-            viewModel.signUpWithEmailPassword(email, password, firstName, lastName)
+        onSignUp = { email, password ->
+            viewModel.signUpWithEmailPassword(email, password)
         },
         onGoogleSignIn = {
             viewModel.signInWithGoogle(context)
@@ -147,7 +143,7 @@ fun AuthenticationScreenContent(
     formState: AuthFormState,
     onFormStateChange: (AuthFormState) -> Unit,
     onSignIn: (email: String, password: String) -> Unit,
-    onSignUp: (email: String, password: String, firstName: String, lastName: String) -> Unit,
+    onSignUp: (email: String, password: String) -> Unit,
     onGoogleSignIn: () -> Unit,
     onSkip: () -> Unit,
     modifier: Modifier = Modifier
@@ -157,14 +153,6 @@ fun AuthenticationScreenContent(
 
     fun validateSignUp() {
         when {
-            formState.firstName.isBlank() -> Toast.makeText(
-                context, "First name is required", Toast.LENGTH_SHORT
-            ).show()
-
-            formState.lastName.isBlank() -> Toast.makeText(
-                context, "Last name is required", Toast.LENGTH_SHORT
-            ).show()
-
             formState.email.isBlank() -> Toast.makeText(
                 context, "Email is required", Toast.LENGTH_SHORT
             ).show()
@@ -187,12 +175,7 @@ fun AuthenticationScreenContent(
                 context, "Passwords don't match", Toast.LENGTH_SHORT
             ).show()
 
-            else -> onSignUp(
-                formState.email,
-                formState.password,
-                formState.firstName,
-                formState.lastName
-            )
+            else -> onSignUp(formState.email, formState.password)
         }
     }
 
@@ -215,43 +198,6 @@ fun AuthenticationScreenContent(
             )
 
             Spacer(modifier = Modifier.height(32.dp))
-
-            // Email/Password Form
-            if (formState.isSignUp) {
-                OutlinedTextField(
-                    value = formState.firstName,
-                    onValueChange = { onFormStateChange(formState.copy(firstName = it)) },
-                    label = { Text("First Name") },
-                    leadingIcon = { Icon(Icons.Default.Person, contentDescription = null) },
-                    modifier = Modifier.fillMaxWidth(),
-                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next),
-                    keyboardActions = KeyboardActions(onNext = {
-                        focusManager.moveFocus(
-                            FocusDirection.Down
-                        )
-                    }),
-                    singleLine = true
-                )
-
-                Spacer(modifier = Modifier.height(12.dp))
-
-                OutlinedTextField(
-                    value = formState.lastName,
-                    onValueChange = { onFormStateChange(formState.copy(lastName = it)) },
-                    label = { Text("Last Name") },
-                    leadingIcon = { Icon(Icons.Default.Person, contentDescription = null) },
-                    modifier = Modifier.fillMaxWidth(),
-                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next),
-                    keyboardActions = KeyboardActions(onNext = {
-                        focusManager.moveFocus(
-                            FocusDirection.Down
-                        )
-                    }),
-                    singleLine = true
-                )
-
-                Spacer(modifier = Modifier.height(12.dp))
-            }
 
             OutlinedTextField(
                 value = formState.email,
@@ -479,7 +425,7 @@ fun AuthenticationScreenSignInPreview() {
             formState = AuthFormState(isSignUp = false),
             onFormStateChange = {},
             onSignIn = { _, _ -> },
-            onSignUp = { _, _, _, _ -> },
+            onSignUp = { _, _ -> },
             onGoogleSignIn = {},
             onSkip = {}
         )
@@ -494,7 +440,7 @@ fun AuthenticationScreenSignInPreviewDark() {
             formState = AuthFormState(isSignUp = false),
             onFormStateChange = {},
             onSignIn = { _, _ -> },
-            onSignUp = { _, _, _, _ -> },
+            onSignUp = { _, _ -> },
             onGoogleSignIn = {},
             onSkip = {}
         )
@@ -509,7 +455,7 @@ fun AuthenticationScreenSignUpPreview() {
             formState = AuthFormState(isSignUp = true),
             onFormStateChange = {},
             onSignIn = { _, _ -> },
-            onSignUp = { _, _, _, _ -> },
+            onSignUp = { _, _ -> },
             onGoogleSignIn = {},
             onSkip = {}
         )
@@ -524,7 +470,7 @@ fun AuthenticationScreenSignUpPreviewDark() {
             formState = AuthFormState(isSignUp = true),
             onFormStateChange = {},
             onSignIn = { _, _ -> },
-            onSignUp = { _, _, _, _ -> },
+            onSignUp = { _, _ -> },
             onGoogleSignIn = {},
             onSkip = {}
         )

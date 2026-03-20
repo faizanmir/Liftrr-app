@@ -10,7 +10,7 @@ import dagger.hilt.components.SingletonComponent
 import kotlinx.coroutines.CoroutineName
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.SupervisorJob
-import org.liftrr.data.preferences.ThemePreferences
+import org.liftrr.data.local.preferences.ThemePreferences
 import org.liftrr.di.annotations.creds.GoogleSignInClientId
 import org.liftrr.utils.DefaultDispatcherProvider
 import org.liftrr.utils.DispatcherProvider
@@ -23,9 +23,6 @@ abstract class AppBindsModule {
     @Binds
     @Singleton
     abstract fun bindDispatcherProvider(impl: DefaultDispatcherProvider): DispatcherProvider
-
-
-
 }
 
 

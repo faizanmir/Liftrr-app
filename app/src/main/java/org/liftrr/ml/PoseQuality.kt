@@ -1,6 +1,8 @@
 package org.liftrr.ml
 
 import com.google.mediapipe.tasks.components.containers.NormalizedLandmark
+import org.liftrr.domain.pose.PoseLandmarks
+import org.liftrr.domain.workout.ExerciseType
 
 enum class FramingFeedback {
     TOO_CLOSE,

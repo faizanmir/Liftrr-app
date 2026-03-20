@@ -11,8 +11,8 @@ class SquatExercise : Exercise {
     private var lastRepTime = 0L
     private var frameStabilityCount = 0
 
-    private val kneeSmoother = AngleSmoother(5)
-    private val hipSmoother = AngleSmoother(5)
+    private val kneeSmoother = AngleSmoother(3)
+    private val hipSmoother = AngleSmoother(3)
 
     // Rep Metrics
     private var repMinKneeAngle = 180f
@@ -26,8 +26,8 @@ class SquatExercise : Exercise {
         private const val FORWARD_LEAN_LIMIT = 45f    // Degrees of torso tilt
         private const val VALGUS_THRESHOLD = 0.88f    // Knee width / Ankle width
 
-        private const val MIN_REP_DURATION = 1100L
-        private const val STABILITY_REQUIRED = 3
+        private const val MIN_REP_DURATION = 700L
+        private const val STABILITY_REQUIRED = 2
     }
 
     override fun updateRepCount(pose: PoseDetectionResult.Success): Boolean {
@@ -64,6 +64,8 @@ class SquatExercise : Exercise {
                         currentState = State.BOTTOM
                         frameStabilityCount = 0
                     }
+                } else {
+                    frameStabilityCount = 0 // Reset when not in position
                 }
                 false
             }

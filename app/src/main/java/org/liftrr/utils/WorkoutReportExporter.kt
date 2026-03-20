@@ -504,13 +504,18 @@ object WorkoutReportExporter {
                 context, "${context.packageName}.fileprovider", file
             )
 
-            ShareCompat.IntentBuilder(context)
+           val shareIntent =  ShareCompat.IntentBuilder(context)
                 .setType(mimeType)
                 .setStream(uri)
                 .setSubject("My Liftrr Workout Report")
                 .setText("Check out my workout results from Liftrr!")
                 .setChooserTitle("Share Workout Report")
-                .startChooser()
+                .intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            val chooserIntent = Intent.createChooser(shareIntent, "Share Workout Report")
+                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+
+            // 3. Start Activity using the modified intent
+            context.startActivity(chooserIntent)
         } catch (e: Exception) {
             android.util.Log.e("WorkoutReportExporter", "Failed to share report", e)
             e.printStackTrace()
@@ -727,14 +732,14 @@ object WorkoutReportExporter {
                                 var labelY = yPosition + imageHeight + 15f
                                 val badPaint = Paint().apply {
                                     textSize = 14f
-                                    color = android.graphics.Color.parseColor("#D32F2F") // Red
+                                    color = "#D32F2F".toColorInt() // Red
                                     isFakeBoldText = true
                                 }
                                 canvas.drawText("✗ Needs Work", rightX, labelY, badPaint)
                                 labelY += 14f
 
                                 // Display form score
-                                diagPaint.color = android.graphics.Color.parseColor("#D32F2F")
+                                diagPaint.color = "#D32F2F".toColorInt()
                                 val scoreText = "Score: ${(frame.formScore ?: 0f * 100).toInt()}%"
                                 canvas.drawText(scoreText, rightX, labelY, diagPaint)
                                 labelY += 11f

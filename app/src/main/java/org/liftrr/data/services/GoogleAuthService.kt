@@ -32,9 +32,6 @@ class GoogleAuthService @Inject constructor(
 
     suspend fun signInWithGoogle(context: Context): Result<FirebaseUser> {
         return try {
-            Log.d(TAG, "Starting Google Sign-In")
-            Log.d(TAG, "WEB_CLIENT_ID: $webClientId")
-
             val credentialManager = CredentialManager.create(context)
             val nonce = generateNonce()
             val googleIdOption = buildGoogleIdOption(nonce)

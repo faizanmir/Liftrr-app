@@ -10,9 +10,9 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
-import org.liftrr.data.models.WorkoutSessionEntity
-import org.liftrr.data.repository.WorkoutRepository
-import org.liftrr.ml.ExerciseType
+import org.liftrr.domain.workout.WorkoutRecord
+import org.liftrr.domain.workout.WorkoutRepository
+import org.liftrr.domain.workout.ExerciseType
 import java.text.SimpleDateFormat
 import java.util.Locale
 import javax.inject.Inject
@@ -83,7 +83,7 @@ class AnalyticsViewModel @Inject constructor(
     }
 
     private fun buildState(
-        workouts: List<WorkoutSessionEntity>, range: TimeRange
+        workouts: List<WorkoutRecord>, range: TimeRange
     ): AnalyticsUiState.Success {
         return AnalyticsUiState.Success(
             selectedTimeRange = range,
@@ -96,7 +96,7 @@ class AnalyticsViewModel @Inject constructor(
         )
     }
 
-    private fun calculateOverview(workouts: List<WorkoutSessionEntity>): OverviewStats {
+    private fun calculateOverview(workouts: List<WorkoutRecord>): OverviewStats {
         if (workouts.isEmpty()) {
             return OverviewStats(0, 0, 0f, 0f, "reps", null)
         }
@@ -128,7 +128,7 @@ class AnalyticsViewModel @Inject constructor(
     }
 
     private fun calculateFormQualityTrend(
-        workouts: List<WorkoutSessionEntity>, range: TimeRange
+        workouts: List<WorkoutRecord>, range: TimeRange
     ): List<FormQualityPoint> {
         val sorted = workouts.sortedBy { it.timestamp }
         val dateFormat = when (range) {
@@ -146,7 +146,7 @@ class AnalyticsViewModel @Inject constructor(
     }
 
     private fun calculateVolumeTrend(
-        workouts: List<WorkoutSessionEntity>, range: TimeRange
+        workouts: List<WorkoutRecord>, range: TimeRange
     ): List<VolumeTrendPoint> {
         if (workouts.isEmpty()) return emptyList()
 
@@ -179,7 +179,7 @@ class AnalyticsViewModel @Inject constructor(
     }
 
     private fun calculateExerciseDistribution(
-        workouts: List<WorkoutSessionEntity>
+        workouts: List<WorkoutRecord>
     ): List<ExerciseDistributionItem> {
         if (workouts.isEmpty()) return emptyList()
         val total = workouts.size.toFloat()
@@ -193,7 +193,7 @@ class AnalyticsViewModel @Inject constructor(
     }
 
     private fun calculateGradeDistribution(
-        workouts: List<WorkoutSessionEntity>
+        workouts: List<WorkoutRecord>
     ): Map<String, Int> {
         val counts = workouts.groupingBy { it.grade.uppercase() }.eachCount()
         val ordered = linkedMapOf<String, Int>()
@@ -204,7 +204,7 @@ class AnalyticsViewModel @Inject constructor(
     }
 
     private fun calculatePersonalRecords(
-        workouts: List<WorkoutSessionEntity>
+        workouts: List<WorkoutRecord>
     ): List<PersonalRecord> {
         return workouts.groupBy { it.exerciseType }.mapNotNull { (type, list) ->
                 try {
