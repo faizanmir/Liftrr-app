@@ -7,7 +7,9 @@ import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
 import dagger.assisted.Assisted
 import dagger.assisted.AssistedInject
-import org.liftrr.domain.workout.WorkoutRepository
+import org.liftrr.data.local.workout.WorkoutDao
+import org.liftrr.data.local.workout.WorkoutSyncQueueDao
+import org.liftrr.data.models.dto.WorkoutSyncOperation
 import org.liftrr.utils.DispatcherProvider
 import java.io.File
 import kotlinx.coroutines.withContext
@@ -22,14 +24,21 @@ import kotlinx.coroutines.withContext
 class WorkoutCleanupWorker @AssistedInject constructor(
     @Assisted appContext: Context,
     @Assisted workerParams: WorkerParameters,
-    private val workoutRepository: WorkoutRepository,
+    private val workoutDao: WorkoutDao,
+    private val syncQueueDao: WorkoutSyncQueueDao,
     private val dispatchers: DispatcherProvider
 ) : CoroutineWorker(appContext, workerParams) {
 
     override suspend fun doWork(): Result = withContext(dispatchers.io) {
         try {
             // Get all workouts marked for deletion
-            val deletedWorkouts = workoutRepository.getDeletedWorkouts()
+            val deletedWorkouts = workoutDao.getDeletedWorkouts()
+                .filter { workout ->
+                    syncQueueDao.countIncompleteOperation(
+                        sessionId = workout.sessionId,
+                        operation = WorkoutSyncOperation.DELETE_WORKOUT
+                    ) == 0
+                }
 
             // Delete video files and permanently remove from database
             deletedWorkouts.forEach { workout ->
@@ -57,7 +66,7 @@ class WorkoutCleanupWorker @AssistedInject constructor(
                 }
 
                 // Permanently delete from database
-                workoutRepository.permanentlyDeleteWorkout(workout.sessionId)
+                workoutDao.permanentlyDeleteWorkout(workout.sessionId)
             }
 
             Log.d(

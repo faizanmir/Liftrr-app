@@ -7,6 +7,7 @@ import androidx.room.OnConflictStrategy
 import androidx.room.Query
 import androidx.room.Update
 import kotlinx.coroutines.flow.Flow
+import org.liftrr.data.models.dto.SyncStatus
 import org.liftrr.data.models.dto.WorkoutSessionEntity
 
 @Dao
@@ -44,11 +45,57 @@ interface WorkoutDao {
     @Update
     suspend fun updateWorkout(workout: WorkoutSessionEntity)
 
-    @Query("UPDATE workout_sessions SET isDeleted = 1, deletedAt = :deletedAt WHERE sessionId = :sessionId")
-    suspend fun markAsDeleted(sessionId: String, deletedAt: Long)
+    @Query("UPDATE workout_sessions SET isDeleted = 1, deletedAt = :deletedAt, syncStatus = :syncStatus WHERE sessionId = :sessionId")
+    suspend fun markAsDeleted(
+        sessionId: String,
+        deletedAt: Long,
+        syncStatus: SyncStatus = SyncStatus.PENDING
+    )
 
-    @Query("UPDATE workout_sessions SET isDeleted = 0, deletedAt = NULL WHERE sessionId = :sessionId")
-    suspend fun unmarkAsDeleted(sessionId: String)
+    @Query("UPDATE workout_sessions SET isDeleted = 0, deletedAt = NULL, syncStatus = :syncStatus WHERE sessionId = :sessionId")
+    suspend fun unmarkAsDeleted(
+        sessionId: String,
+        syncStatus: SyncStatus = SyncStatus.PENDING
+    )
+
+    @Query("UPDATE workout_sessions SET syncStatus = :syncStatus WHERE sessionId = :sessionId")
+    suspend fun updateSyncStatus(sessionId: String, syncStatus: SyncStatus)
+
+    @Query(
+        """
+        UPDATE workout_sessions
+        SET serverId = :serverId,
+            videoCloudUrl = COALESCE(:videoCloudUrl, videoCloudUrl),
+            version = COALESCE(:version, version)
+        WHERE sessionId = :sessionId
+        """
+    )
+    suspend fun updateRemoteIdentity(
+        sessionId: String,
+        serverId: String,
+        videoCloudUrl: String?,
+        version: Int?
+    )
+
+    @Query(
+        """
+        UPDATE workout_sessions
+        SET serverId = :serverId,
+            videoCloudUrl = COALESCE(:videoCloudUrl, videoCloudUrl),
+            syncStatus = :syncStatus,
+            lastSyncedAt = :lastSyncedAt,
+            version = COALESCE(:version, version)
+        WHERE sessionId = :sessionId
+        """
+    )
+    suspend fun markSynced(
+        sessionId: String,
+        serverId: String,
+        videoCloudUrl: String?,
+        syncStatus: SyncStatus = SyncStatus.SYNCED,
+        lastSyncedAt: Long,
+        version: Int?
+    )
 
     @Delete
     suspend fun deleteWorkout(workout: WorkoutSessionEntity)

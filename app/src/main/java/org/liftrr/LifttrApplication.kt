@@ -1,7 +1,12 @@
 package org.liftrr
 
 import android.app.Application
+import android.util.Log
 import dagger.hilt.android.HiltAndroidApp
+import androidx.hilt.work.HiltWorkerFactory
+import androidx.work.Configuration
+import org.liftrr.BuildConfig
+import javax.inject.Inject
 
 /**
  * Liftrr Application class.
@@ -12,8 +17,18 @@ import dagger.hilt.android.HiltAndroidApp
  * - No eager initialization in Application.onCreate() for faster startup
  */
 @HiltAndroidApp
-class LifttrApplication : Application() {
-    // Intentionally empty - all initialization handled by:
+class LifttrApplication : Application(), Configuration.Provider {
+
+    @Inject
+    lateinit var workerFactory: HiltWorkerFactory
+
+    override val workManagerConfiguration: Configuration
+        get() = Configuration.Builder()
+            .setWorkerFactory(workerFactory)
+            .setMinimumLoggingLevel(if (BuildConfig.DEBUG) Log.DEBUG else Log.ERROR)
+            .build()
+
+    // App initialization is handled by:
     // 1. App Startup library (MediaPipeInitializer)
     // 2. Hilt lazy injection
     // 3. ViewModel initialization when screens are opened

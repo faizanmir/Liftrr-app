@@ -10,6 +10,8 @@ import org.liftrr.data.BuildConfig
 import org.liftrr.data.remote.AccountApiService
 import org.liftrr.data.remote.AuthApiService
 import org.liftrr.data.remote.UserProfileApiService
+import org.liftrr.data.remote.WorkoutSessionApiService
+import org.liftrr.data.remote.WorkoutVideoApiService
 import org.liftrr.data.remote.auth.AuthInterceptor
 import org.liftrr.data.remote.auth.TokenRefreshAuthenticator
 import org.liftrr.di.annotations.network.BaseUrl
@@ -42,6 +44,16 @@ object NetworkModule {
     @Singleton
     fun provideAccountApiService(retrofit: Retrofit): AccountApiService =
         retrofit.create(AccountApiService::class.java)
+
+    @Provides
+    @Singleton
+    fun provideWorkoutSessionApiService(retrofit: Retrofit): WorkoutSessionApiService =
+        retrofit.create(WorkoutSessionApiService::class.java)
+
+    @Provides
+    @Singleton
+    fun provideWorkoutVideoApiService(retrofit: Retrofit): WorkoutVideoApiService =
+        retrofit.create(WorkoutVideoApiService::class.java)
 
     @Provides
     @Singleton

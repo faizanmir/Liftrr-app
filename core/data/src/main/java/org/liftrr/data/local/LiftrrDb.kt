@@ -5,19 +5,23 @@ import androidx.room.RoomDatabase
 import androidx.room.TypeConverters
 import org.liftrr.data.local.workout.WeightsDao
 import org.liftrr.data.local.workout.WorkoutDao
+import org.liftrr.data.local.workout.WorkoutSyncQueueDao
 import org.liftrr.data.models.dto.UserWeightDto
 import org.liftrr.data.models.dto.WorkoutSessionEntity
+import org.liftrr.data.models.dto.WorkoutSyncQueueEntity
 
 @Database(
     entities = [
         WorkoutSessionEntity::class,
-        UserWeightDto::class
+        UserWeightDto::class,
+        WorkoutSyncQueueEntity::class
     ],
-    version = 2,
+    version = 3,
     exportSchema = false
 )
 @TypeConverters(Converters::class)
 abstract class LiftrrDb : RoomDatabase() {
     abstract fun workoutDao(): WorkoutDao
     abstract fun weightDao(): WeightsDao
+    abstract fun workoutSyncQueueDao(): WorkoutSyncQueueDao
 }

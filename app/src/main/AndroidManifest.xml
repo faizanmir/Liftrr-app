@@ -28,6 +28,9 @@
             android:authorities="${applicationId}.androidx-startup"
             android:exported="false"
             tools:node="merge">
+            <meta-data
+                android:name="androidx.work.WorkManagerInitializer"
+                tools:node="remove" />
             <!-- MediaPipe Pre-warming -->
             <meta-data
                 android:name="org.liftrr.startup.MediaPipeInitializer"

@@ -16,6 +16,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import com.google.gson.Gson
 import org.liftrr.data.models.dto.RepDataDto
+import org.liftrr.domain.auth.AuthRepository
 import org.liftrr.domain.workout.WorkoutRecord
 import org.liftrr.domain.weight.UserWeightRepository
 import org.liftrr.domain.workout.WorkoutRepository
@@ -63,6 +64,7 @@ class WorkoutViewModel @Inject constructor(
     val poseDetector: PoseDetector,
     private val workoutReportHolder: WorkoutReportHolder,
     private val workoutRepository: WorkoutRepository,
+    private val authRepository: AuthRepository,
     private val userWeightRepository: UserWeightRepository,
     val dispatchers: DispatcherProvider
 ) : ViewModel() {
@@ -241,6 +243,8 @@ class WorkoutViewModel @Inject constructor(
             }
 
             val keyFrames = keyFrameCapture.processAndSaveKeyFrames(session.id)
+            val userId = authRepository.getCurrentUserOnce()?.userId
+                ?: error("Cannot save workout without an authenticated backend user")
 
             workoutRepository.saveWorkout(WorkoutRecord(
                 sessionId = session.id,
@@ -255,7 +259,7 @@ class WorkoutViewModel @Inject constructor(
                 videoUri = videoUri,
                 weight = weight,
                 timestamp = System.currentTimeMillis(),
-                userId = "local",
+                userId = userId,
                 repDataJson = Gson().toJson(repDataList),
                 keyFramesJson = Gson().toJson(keyFrames)
             ))

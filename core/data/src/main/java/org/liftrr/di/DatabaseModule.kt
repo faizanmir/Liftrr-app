@@ -12,6 +12,7 @@ import org.liftrr.data.local.DatabaseMigrations
 import org.liftrr.data.local.LiftrrDb
 import org.liftrr.data.local.workout.WeightsDao
 import org.liftrr.data.local.workout.WorkoutDao
+import org.liftrr.data.local.workout.WorkoutSyncQueueDao
 import org.liftrr.domain.auth.AuthRepository
 import org.liftrr.data.repository.RemoteAuthRepository
 import org.liftrr.data.repository.UserProfileRepositoryImpl
@@ -41,6 +42,10 @@ object DatabaseModule {
 
     @Provides
     fun provideWorkoutDao(database: LiftrrDb): WorkoutDao = database.workoutDao()
+
+    @Provides
+    fun provideWorkoutSyncQueueDao(database: LiftrrDb): WorkoutSyncQueueDao =
+        database.workoutSyncQueueDao()
 
     @Provides
     fun provideUserWeightsDao(database: LiftrrDb): WeightsDao = database.weightDao()

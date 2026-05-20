@@ -160,6 +160,10 @@ dependencies {
     // Lifecycle (process lifecycle observer in Application)
     implementation(libs.androidx.lifecycle.process)
 
+    // WorkManager Hilt worker factory lives in :app Configuration.Provider
+    implementation(libs.androidx.work.runtime.ktx)
+    implementation(libs.androidx.hilt.work)
+
     // Testing
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)

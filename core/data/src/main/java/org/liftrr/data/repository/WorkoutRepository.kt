@@ -1,11 +1,20 @@
 package org.liftrr.data.repository
 
+import androidx.room.withTransaction
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.withContext
+import org.liftrr.data.local.LiftrrDb
+import org.liftrr.data.local.preferences.TokenStore
 import org.liftrr.data.local.workout.WorkoutDao
+import org.liftrr.data.local.workout.WorkoutSyncQueueDao
+import org.liftrr.data.models.dto.SyncStatus
+import org.liftrr.data.models.dto.WorkoutSyncOperation
+import org.liftrr.data.models.dto.WorkoutSyncQueueEntity
+import org.liftrr.data.models.dto.WorkoutSyncState
 import org.liftrr.data.repository.mappers.toDomain
 import org.liftrr.data.repository.mappers.toEntity
+import org.liftrr.data.workmanager.WorkoutSyncScheduler
 import org.liftrr.domain.workout.WorkoutRecord
 import org.liftrr.domain.workout.WorkoutRepository
 import org.liftrr.domain.workout.WorkoutStats
@@ -14,7 +23,11 @@ import java.util.Calendar
 import javax.inject.Inject
 
 class WorkoutRepositoryImpl @Inject constructor(
+    private val database: LiftrrDb,
     private val workoutDao: WorkoutDao,
+    private val syncQueueDao: WorkoutSyncQueueDao,
+    private val tokenStore: TokenStore,
+    private val syncScheduler: WorkoutSyncScheduler,
     private val dispatchers: DispatcherProvider
 ) : WorkoutRepository {
 
@@ -58,16 +71,64 @@ class WorkoutRepositoryImpl @Inject constructor(
         }
 
     override suspend fun saveWorkout(workout: WorkoutRecord) = withContext(dispatchers.io) {
-        workoutDao.insertWorkout(workout.toEntity())
+        val now = System.currentTimeMillis()
+        val entity = workout.copy(userId = resolveUserId(workout)).toEntity(
+            syncStatus = SyncStatus.PENDING
+        )
+        database.withTransaction {
+            workoutDao.insertWorkout(entity)
+            syncQueueDao.upsert(
+                WorkoutSyncQueueEntity(
+                    queueId = WorkoutSyncQueueEntity.queueId(
+                        workout.sessionId,
+                        WorkoutSyncOperation.UPSERT_WORKOUT
+                    ),
+                    sessionId = workout.sessionId,
+                    operation = WorkoutSyncOperation.UPSERT_WORKOUT,
+                    state = WorkoutSyncState.PENDING,
+                    createdAt = now,
+                    updatedAt = now,
+                    nextEligibleAt = now
+                )
+            )
+        }
+        syncScheduler.scheduleSync()
     }
 
     override suspend fun markWorkoutAsDeleted(sessionId: String, deletedAt: Long) =
         withContext(dispatchers.io) {
-            workoutDao.markAsDeleted(sessionId, deletedAt)
+            val now = System.currentTimeMillis()
+            database.withTransaction {
+                workoutDao.markAsDeleted(sessionId, deletedAt)
+                syncQueueDao.upsert(
+                    WorkoutSyncQueueEntity(
+                        queueId = WorkoutSyncQueueEntity.queueId(
+                            sessionId,
+                            WorkoutSyncOperation.DELETE_WORKOUT
+                        ),
+                        sessionId = sessionId,
+                        operation = WorkoutSyncOperation.DELETE_WORKOUT,
+                        state = WorkoutSyncState.PENDING,
+                        createdAt = now,
+                        updatedAt = now,
+                        nextEligibleAt = now
+                    )
+                )
+            }
+            syncScheduler.scheduleSync()
         }
 
     override suspend fun restoreWorkout(sessionId: String) = withContext(dispatchers.io) {
-        workoutDao.unmarkAsDeleted(sessionId)
+        val now = System.currentTimeMillis()
+        database.withTransaction {
+            workoutDao.unmarkAsDeleted(sessionId)
+            syncQueueDao.markOperationSucceeded(
+                sessionId = sessionId,
+                operation = WorkoutSyncOperation.DELETE_WORKOUT,
+                updatedAt = now
+            )
+        }
+        syncScheduler.scheduleSync()
     }
 
     override suspend fun getDeletedWorkouts(): List<WorkoutRecord> = withContext(dispatchers.io) {
@@ -127,4 +188,9 @@ class WorkoutRepositoryImpl @Inject constructor(
     private fun gradeToScore(grade: String): Int = when (grade.uppercase()) {
         "A" -> 1; "B" -> 2; "C" -> 3; "D" -> 4; "F" -> 5; else -> 6
     }
+
+    private fun resolveUserId(workout: WorkoutRecord): String =
+        tokenStore.getUserIdFromAccessToken()
+            ?: workout.userId.takeUnless { it == "local" }
+            ?: error("Cannot save workout without an authenticated backend user")
 }
