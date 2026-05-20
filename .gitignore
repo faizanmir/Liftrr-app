@@ -30,6 +30,13 @@ app/src/main/assets/llm/
 app/google-services.json
 
 # Secrets file (OAuth client IDs, API keys)
-app/src/main/res/values/secrets.xml
+**/src/main/res/values/secrets.xml
 # Local code graph cache
 .code-review-graph/
+
+# MCP / tooling local config
+.mcp.json
+.serena/
+
+# Generated knowledge graph artifacts
+graphify-out/
