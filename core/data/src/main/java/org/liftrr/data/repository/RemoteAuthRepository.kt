@@ -60,6 +60,7 @@ class RemoteAuthRepository @Inject constructor(
         )
     }
 
+    @Suppress("TooGenericExceptionCaught")
     override suspend fun signInWithEmailPassword(email: String, password: String): AuthResult {
         return try {
             val response = authApiService.login(LoginRequest(email, password))
@@ -72,6 +73,7 @@ class RemoteAuthRepository @Inject constructor(
         }
     }
 
+    @Suppress("TooGenericExceptionCaught")
     override suspend fun signUpWithEmailPassword(
         email: String,
         password: String,
@@ -89,6 +91,7 @@ class RemoteAuthRepository @Inject constructor(
         }
     }
 
+    @Suppress("TooGenericExceptionCaught")
     override suspend fun signInWithGoogle(context: Context): AuthResult {
         return try {
             val googleToken = googleAuthService.getGoogleSignInToken(context).getOrElse {
@@ -112,6 +115,7 @@ class RemoteAuthRepository @Inject constructor(
 
     override suspend fun getCurrentUserOnce(): User? = _currentUser.value
 
+    @Suppress("TooGenericExceptionCaught")
     override suspend fun signOut() {
         try {
             val refreshToken = tokenStore.getRefreshToken()

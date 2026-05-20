@@ -42,6 +42,7 @@ class WorkoutSummaryViewModel @Inject constructor(
 
     private var isLLMInitialized = false
 
+    @Suppress("TooGenericExceptionCaught")
     private suspend fun ensureLLMInitialized() {
         if (isLLMInitialized) return
 
@@ -80,6 +81,7 @@ class WorkoutSummaryViewModel @Inject constructor(
         }
     }
 
+    @Suppress("TooGenericExceptionCaught")
     private suspend fun generateSummary(report: WorkoutReport) {
         _uiState.update { it.copy(aiSummary = AIInsightState.Loading) }
         try {
@@ -95,6 +97,7 @@ class WorkoutSummaryViewModel @Inject constructor(
         }
     }
 
+    @Suppress("TooGenericExceptionCaught")
     private suspend fun generateRecommendations(report: WorkoutReport) {
         _uiState.update { it.copy(aiRecommendations = AIInsightState.Loading) }
         try {
@@ -112,6 +115,7 @@ class WorkoutSummaryViewModel @Inject constructor(
         }
     }
 
+    @Suppress("TooGenericExceptionCaught")
     private suspend fun generateMotivation(report: WorkoutReport) {
         try {
             val ctx = when {
@@ -123,6 +127,7 @@ class WorkoutSummaryViewModel @Inject constructor(
             val message = withContext(dispatchers.io) { workoutLLM.generateMotivation(ctx) }
             _uiState.update { it.copy(motivationalMessage = message) }
         } catch (e: Exception) {
+            android.util.Log.w("WorkoutSummaryVM", "Failed to generate motivation", e)
             _uiState.update { it.copy(motivationalMessage = null) }
         }
     }
@@ -137,6 +142,7 @@ class WorkoutSummaryViewModel @Inject constructor(
     /**
      * Export and share workout report as PDF with key frames
      */
+    @Suppress("TooGenericExceptionCaught")
     fun shareAsPdf(report: WorkoutReport) {
         viewModelScope.launch(dispatchers.io) {
             try {
@@ -167,6 +173,7 @@ class WorkoutSummaryViewModel @Inject constructor(
     /**
      * Share workout report as plain text
      */
+    @Suppress("TooGenericExceptionCaught")
     fun shareAsText(report: WorkoutReport) {
         viewModelScope.launch(dispatchers.io) {
             try {

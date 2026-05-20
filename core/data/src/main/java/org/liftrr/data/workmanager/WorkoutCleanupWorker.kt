@@ -29,6 +29,7 @@ class WorkoutCleanupWorker @AssistedInject constructor(
     private val dispatchers: DispatcherProvider
 ) : CoroutineWorker(appContext, workerParams) {
 
+    @Suppress("TooGenericExceptionCaught")
     override suspend fun doWork(): Result = withContext(dispatchers.io) {
         try {
             // Get all workouts marked for deletion

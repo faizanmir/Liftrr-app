@@ -87,6 +87,7 @@ class WorkoutViewModel @Inject constructor(
     private val capturedPhasesThisRep = mutableSetOf<MovementPhase>()
     private var lastRepNumber = 0
 
+    @Suppress("TooGenericExceptionCaught")
     fun preInitializePoseDetector() {
         if (isPoseDetectorInitialized) return
         viewModelScope.launch {
@@ -99,6 +100,7 @@ class WorkoutViewModel @Inject constructor(
         }
     }
 
+    @Suppress("TooGenericExceptionCaught")
     fun observePoseDetection() {
         viewModelScope.launch {
             try {
@@ -127,15 +129,16 @@ class WorkoutViewModel @Inject constructor(
                             }
 
                             // Capture Logic with Validity Check
-                            if (result is PoseDetectionResult.Success && _uiState.value.isRecording) {
-                                if (workoutState.poseQualityScore > 0.4f) {
-                                    capturePhaseFrameIfNeeded(
-                                        result = result,
-                                        repNumber = currentRepCount,
-                                        formScore = workoutState.poseQualityScore,
-                                        formFeedback = workoutState.formFeedback
-                                    )
-                                }
+                            if (result is PoseDetectionResult.Success &&
+                                _uiState.value.isRecording &&
+                                workoutState.poseQualityScore > 0.4f
+                            ) {
+                                capturePhaseFrameIfNeeded(
+                                    result = result,
+                                    repNumber = currentRepCount,
+                                    formScore = workoutState.poseQualityScore,
+                                    formFeedback = workoutState.formFeedback
+                                )
                             }
 
                             // Update workout stats (pose already updated above)

@@ -1,3 +1,5 @@
+@file:Suppress("TopLevelPropertyNaming")
+
 package org.liftrr.ui.theme
 
 import androidx.compose.foundation.shape.RoundedCornerShape

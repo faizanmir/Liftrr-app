@@ -1,3 +1,5 @@
+@file:Suppress("MatchingDeclarationName", "UnusedPrivateMember")
+
 package org.liftrr.ui.screens.welcome
 
 import android.content.res.Configuration

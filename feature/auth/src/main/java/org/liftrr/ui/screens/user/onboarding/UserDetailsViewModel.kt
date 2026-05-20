@@ -17,7 +17,7 @@ import org.liftrr.domain.user.UserProfileRepository
 import org.liftrr.domain.workout.ExerciseType
 import javax.inject.Inject
 
-val FITNESS_GOALS = listOf(
+val fitnessGoals = listOf(
     "Lose Weight",
     "Build Muscle",
     "Improve Endurance",
@@ -41,9 +41,7 @@ data class UserDetailsFormState(
     val preferredExerciseType: ExerciseType = ExerciseType.DEADLIFT,
     val preferredUnits : UnitSystem = UnitSystem.METRIC,
     val dob : Long = System.currentTimeMillis()
-) {
-
-}
+)
 
 sealed class UserDetailsSaveState {
     data object Idle : UserDetailsSaveState()
@@ -129,7 +127,8 @@ class UserDetailsViewModel @Inject constructor(
                         height = state.heightCm,
                         fitnessLevel = state.fitnessLevel,
                         goalsJson = goalsJson,
-                        userId = authRepository.getCurrentUserOnce()?.userId ?: throw Exception("User not signed in"),
+                        userId = authRepository.getCurrentUserOnce()?.userId
+                            ?: error("User not signed in"),
                         dateOfBirth = state.dob,
                         weight = state.weight,
                         preferredExercises = state.preferredExerciseType,
@@ -137,7 +136,7 @@ class UserDetailsViewModel @Inject constructor(
                     )
                 )
                 _saveState.value = UserDetailsSaveState.Success
-            } catch (e: Exception) {
+            } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
                 _saveState.value = UserDetailsSaveState.Error(e.message ?: "Failed to save profile")
             } finally {
                 _formState.update { it.copy(isSaving = false) }
@@ -149,6 +148,7 @@ class UserDetailsViewModel @Inject constructor(
         _saveState.value = UserDetailsSaveState.Idle
     }
 
+    @Suppress("TooGenericExceptionCaught")
     private fun parseGoalsJson(json: String): Set<String> {
         return try {
             json.trim('[', ']').split(",")
@@ -156,6 +156,7 @@ class UserDetailsViewModel @Inject constructor(
                 .filter { it.isNotBlank() }
                 .toSet()
         } catch (e: Exception) {
+            android.util.Log.w("UserDetailsViewModel", "Failed to parse goals JSON", e)
             emptySet()
         }
     }

@@ -76,8 +76,6 @@ class WorkoutLLM @Inject constructor(
 
         // Generation parameters for MediaPipe LLM
         private const val MAX_TOKENS = 512
-        private const val RESPONSE_LOG_PROBS = false
-        private const val RANDOM_SEED = 0
 
         // System prompts
         private const val SYSTEM_PROMPT = """You are an expert fitness coach and personal trainer.
@@ -91,6 +89,7 @@ Focus on safety, proper form, and progressive improvement."""
          * Development: Uses pushed model from /data/local/tmp/llm/
          * Production: Uses bundled model from assets or downloaded to internal storage
          */
+        @Suppress("TooGenericExceptionCaught")
         private fun getModelPath(context: Context): String {
             // Try development paths first (pushed via adb)
             // MediaPipe LLM uses .task format
@@ -133,6 +132,7 @@ Focus on safety, proper form, and progressive improvement."""
                     }
                 } catch (e: Exception) {
                     // Asset doesn't exist, try next
+                    android.util.Log.d(TAG, "Asset not found: $assetPath", e)
                     continue
                 }
             }
@@ -163,6 +163,7 @@ Focus on safety, proper form, and progressive improvement."""
      * Initialize the LLM
      * Must be called before using any generation methods
      */
+    @Suppress("TooGenericExceptionCaught")
     fun initialize() {
         if (isInitialized) {
             Log.d(TAG, "LLM already initialized")
@@ -364,6 +365,7 @@ Focus on safety, proper form, and progressive improvement."""
     /**
      * Analyze form using multimodal input (image + text)
      */
+    @Suppress("UnusedParameter")
     suspend fun analyzeFormWithImage(
         bitmap: Bitmap,
         exercise: ExerciseType,
@@ -452,6 +454,7 @@ Focus on safety, proper form, and progressive improvement."""
     /**
      * Generate response synchronously with mutex lock to prevent concurrent access
      */
+    @Suppress("TooGenericExceptionCaught")
     private suspend fun generateResponse(prompt: String): String? = llmMutex.withLock {
         val inference = llmInference ?: run {
             Log.e(TAG, "LLM not initialized")
@@ -471,6 +474,7 @@ Focus on safety, proper form, and progressive improvement."""
     /**
      * Generate response asynchronously with streaming
      */
+    @Suppress("TooGenericExceptionCaught")
     fun generateResponseAsync(prompt: String) {
         val inference = llmInference ?: run {
             Log.e(TAG, "LLM not initialized")
@@ -489,20 +493,10 @@ Focus on safety, proper form, and progressive improvement."""
     }
 
     /**
-     * Handle streaming response from LLM
-     */
-    private fun handleStreamingResponse(partialResult: String, done: Boolean) {
-        if (done) {
-            _responses.trySend(LLMResponse.Complete(partialResult))
-        } else {
-            _responses.trySend(LLMResponse.Partial(partialResult))
-        }
-    }
-
-    /**
      * Stop and release LLM resources
      * Note: This is a blocking call - use suspend version if calling from coroutine
      */
+    @Suppress("TooGenericExceptionCaught")
     fun stop() {
         try {
             // Wait for any ongoing generation to complete before closing

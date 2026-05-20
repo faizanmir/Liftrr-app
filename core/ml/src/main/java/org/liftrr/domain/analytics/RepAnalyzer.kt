@@ -81,7 +81,11 @@ class RepAnalyzer {
                 }
 
                 ExerciseType.BENCH_PRESS -> {
-                    calculateElbowFlare(pose)?.let { if (it > AnalysisConstants.EXCESSIVE_ELBOW_FLARE_THRESHOLD) issues.add("Excessive Flare") }
+                    calculateElbowFlare(pose)?.let { flare ->
+                        if (flare > AnalysisConstants.EXCESSIVE_ELBOW_FLARE_THRESHOLD) {
+                            issues.add("Excessive Flare")
+                        }
+                    }
                 }
             }
         }

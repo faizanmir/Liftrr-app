@@ -1,3 +1,5 @@
+@file:Suppress("UnusedPrivateMember")
+
 package org.liftrr.ui.screens.user.profile
 
 import android.os.Build

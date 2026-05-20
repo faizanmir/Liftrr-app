@@ -28,6 +28,7 @@ class MediaPipeInitializer : Initializer<Unit> {
 
     private val initializationScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
 
+    @Suppress("TooGenericExceptionCaught")
     override fun create(context: Context) {
         Log.d(TAG, "Starting MediaPipe pre-warming")
 

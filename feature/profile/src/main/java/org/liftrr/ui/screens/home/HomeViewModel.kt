@@ -102,9 +102,6 @@ class HomeViewModel @Inject constructor(
     private fun calculateWeeklyProgress(weekWorkouts: List<WorkoutRecord>): WeeklyProgress? {
         if (weekWorkouts.isEmpty()) return null
 
-        val today = Calendar.getInstance()
-        val dayOfWeek = (today.get(Calendar.DAY_OF_WEEK) + 5) % 7 // Mon=0..Sun=6
-
         // Build daily volumes for Mon-Sun
         val dailyVolumes = FloatArray(7)
         for (workout in weekWorkouts) {

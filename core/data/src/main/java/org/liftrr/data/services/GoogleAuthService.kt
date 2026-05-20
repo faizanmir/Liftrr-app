@@ -33,6 +33,7 @@ class GoogleAuthService @Inject constructor(
         const val TAG = "GoogleAuthService"
     }
 
+    @Suppress("TooGenericExceptionCaught")
     suspend fun getGoogleSignInToken(context: Context): Result<GoogleSignInToken> {
         return try {
             val credentialManager = CredentialManager.create(context)
@@ -74,7 +75,7 @@ class GoogleAuthService @Inject constructor(
         val bytes = rawNonce.toByteArray()
         val md = MessageDigest.getInstance("SHA-256")
         val digest = md.digest(bytes)
-        return digest.fold("") { str, it -> str + "%02x".format(it) }
+        return digest.fold("") { str, byte -> str + "%02x".format(byte) }
     }
 
     private fun buildGoogleIdOption(nonce: String): GetGoogleIdOption {
@@ -103,6 +104,7 @@ class GoogleAuthService @Inject constructor(
         }
     }
 
+    @Suppress("TooGenericExceptionCaught")
     private fun extractGoogleIdToken(credential: CustomCredential): Result<GoogleSignInToken> {
         return try {
             val googleIdTokenCredential = GoogleIdTokenCredential.createFrom(credential.data)

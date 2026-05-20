@@ -10,11 +10,23 @@ import androidx.camera.core.ImageAnalysis
 import androidx.camera.core.ImageProxy
 import androidx.camera.core.Preview
 import androidx.camera.lifecycle.ProcessCameraProvider
-import androidx.camera.video.*
+import androidx.camera.video.FallbackStrategy
+import androidx.camera.video.Quality
+import androidx.camera.video.QualitySelector
+import androidx.camera.video.Recorder
+import androidx.camera.video.VideoCapture
 import androidx.camera.view.PreviewView
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.runtime.*
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.MutableState
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.viewinterop.AndroidView
@@ -140,8 +152,8 @@ fun PoseCameraWithRecording(
                             imageAnalysis,
                             videoCaptureUseCase
                         )
-                    } catch (e: Exception) {
-                        e.printStackTrace()
+                    } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
+                        android.util.Log.e("PoseCameraWithRecording", "Failed to bind camera", e)
                         onRecordingError("Failed to bind camera: ${e.message}")
                     }
                 }, ContextCompat.getMainExecutor(ctx))
@@ -153,6 +165,7 @@ fun PoseCameraWithRecording(
     }
 }
 
+@Suppress("TooGenericExceptionCaught")
 private fun processImageProxyWithSkipping(
     imageProxy: ImageProxy,
     onFrameCaptured: (bitmap: Bitmap, timestamp: Long, release: () -> Unit) -> Unit,
@@ -188,7 +201,7 @@ private fun processImageProxyWithSkipping(
             isProcessingFrame.value = false
         }
     } catch (e: Exception) {
-        e.printStackTrace()
+        android.util.Log.e("PoseCameraWithRecording", "Frame processing failed", e)
         isProcessingFrame.value = false
     } finally {
         imageProxy.close()
@@ -200,6 +213,7 @@ private fun processImageProxyWithSkipping(
  * Intermediate bitmaps are recycled eagerly. The output bitmap comes from the pool
  * and must be returned via pool.release() when no longer needed.
  */
+@Suppress("TooGenericExceptionCaught")
 private fun imageProxyToBitmap(imageProxy: ImageProxy, outputPool: MutableState<BitmapPool?>): Bitmap? {
     return try {
         val plane = imageProxy.planes[0]
@@ -265,7 +279,7 @@ private fun imageProxyToBitmap(imageProxy: ImageProxy, outputPool: MutableState<
         croppedBitmap.recycle()
         output
     } catch (e: Exception) {
-        e.printStackTrace()
+        android.util.Log.e("PoseCameraWithRecording", "imageProxyToBitmap failed", e)
         null
     }
 }

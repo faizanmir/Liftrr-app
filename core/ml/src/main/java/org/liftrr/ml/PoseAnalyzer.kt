@@ -132,6 +132,7 @@ object PoseAnalyzer {
      * @param rightKnee Right knee landmark
      * @return true if at bottom (bent over) position
      */
+    @Suppress("UnusedParameter")
     fun isDeadliftAtBottom(
         leftShoulder: NormalizedLandmark,
         rightShoulder: NormalizedLandmark,
@@ -159,6 +160,7 @@ object PoseAnalyzer {
      * @param rightKnee Right knee landmark
      * @return true if at top (standing upright) position
      */
+    @Suppress("UnusedParameter")
     fun isDeadliftAtTop(
         leftShoulder: NormalizedLandmark,
         rightShoulder: NormalizedLandmark,

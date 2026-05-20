@@ -56,4 +56,3 @@ object WorkoutAnalyzer {
         return analyzer.analyze(frames)
     }
 }
-        

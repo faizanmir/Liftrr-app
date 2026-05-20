@@ -21,7 +21,10 @@ interface WorkoutDao {
     @Query("SELECT * FROM workout_sessions WHERE isDeleted = 0 AND DATE(timestamp/1000, 'unixepoch') = DATE('now') ORDER BY timestamp DESC")
     fun getTodayWorkouts(): Flow<List<WorkoutSessionEntity>>
 
-    @Query("SELECT * FROM workout_sessions WHERE isDeleted = 0 AND timestamp >= :startOfDay AND timestamp < :endOfDay ORDER BY timestamp DESC")
+    @Query(
+        "SELECT * FROM workout_sessions WHERE isDeleted = 0 " +
+            "AND timestamp >= :startOfDay AND timestamp < :endOfDay ORDER BY timestamp DESC"
+    )
     fun getTodayWorkoutsOptimized(startOfDay: Long, endOfDay: Long): Flow<List<WorkoutSessionEntity>>
 
     @Query("SELECT * FROM workout_sessions WHERE isDeleted = 0 AND timestamp >= :startTime ORDER BY timestamp DESC")

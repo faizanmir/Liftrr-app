@@ -5,6 +5,7 @@ import android.content.Intent
 import android.graphics.BitmapFactory
 import android.graphics.Paint
 import android.graphics.pdf.PdfDocument
+import android.util.Log
 import androidx.core.app.ShareCompat
 import androidx.core.content.FileProvider
 import androidx.core.graphics.toColorInt
@@ -23,17 +24,22 @@ import java.util.Locale
 /**
  * Utility for exporting and sharing workout reports in various formats
  */
+@Suppress("LargeClass")
 object WorkoutReportExporter {
+
+    private const val TAG = "WorkoutReportExporter"
 
     /**
      * Export workout report as PDF with key frames
      */
+    @Suppress("TooGenericExceptionCaught")
     fun exportAsPdf(context: Context, report: WorkoutReport, keyFramesJson: String? = null): File {
         val keyFrames = keyFramesJson?.let {
             try {
                 val type = object : TypeToken<List<KeyFrame>>() {}.type
                 Gson().fromJson<List<KeyFrame>>(it, type)
             } catch (e: Exception) {
+                Log.w(TAG, "Failed to parse keyFramesJson", e)
                 null
             }
         } ?: emptyList()
@@ -44,6 +50,7 @@ object WorkoutReportExporter {
     /**
      * Internal PDF export with key frames - Enhanced with Liftrr theme
      */
+    @Suppress("LongMethod", "CyclomaticComplexMethod")
     private fun exportAsPdfWithFrames(
         context: Context,
         report: WorkoutReport,
@@ -498,6 +505,7 @@ object WorkoutReportExporter {
     /**
      * Share report via Android share sheet
      */
+    @Suppress("TooGenericExceptionCaught")
     fun shareReport(context: Context, file: File, mimeType: String = "application/pdf") {
         try {
             val uri = FileProvider.getUriForFile(
@@ -517,14 +525,14 @@ object WorkoutReportExporter {
             // 3. Start Activity using the modified intent
             context.startActivity(chooserIntent)
         } catch (e: Exception) {
-            android.util.Log.e("WorkoutReportExporter", "Failed to share report", e)
-            e.printStackTrace()
+            Log.e(TAG, "Failed to share report", e)
         }
     }
 
     /**
      * Share report as text
      */
+    @Suppress("TooGenericExceptionCaught")
     fun shareAsText(context: Context, text: String) {
         try {
             ShareCompat.IntentBuilder(context)
@@ -534,8 +542,7 @@ object WorkoutReportExporter {
                 .setChooserTitle("Share Workout Report")
                 .startChooser()
         } catch (e: Exception) {
-            android.util.Log.e("WorkoutReportExporter", "Failed to share text", e)
-            e.printStackTrace()
+            Log.e(TAG, "Failed to share text", e)
         }
     }
 
@@ -576,6 +583,7 @@ object WorkoutReportExporter {
     /**
      * Add pages with side-by-side phase comparison of good vs bad form
      */
+    @Suppress("TooGenericExceptionCaught", "LongMethod", "CyclomaticComplexMethod", "NestedBlockDepth")
     private fun addKeyFramesPage(
         pdfDocument: PdfDocument,
         keyFrames: List<KeyFrame>,
@@ -813,6 +821,7 @@ object WorkoutReportExporter {
     /**
      * Legacy key frames display for backward compatibility
      */
+    @Suppress("TooGenericExceptionCaught", "NestedBlockDepth")
     private fun addLegacyKeyFramesPage(
         pdfDocument: PdfDocument,
         keyFrames: List<KeyFrame>,

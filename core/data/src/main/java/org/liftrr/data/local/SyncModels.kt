@@ -1,3 +1,5 @@
+@file:Suppress("MatchingDeclarationName")
+
 package org.liftrr.data.local
 
 enum class SyncStatus {

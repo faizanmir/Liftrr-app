@@ -2,14 +2,19 @@ package org.liftrr.data.video
 
 import android.content.Context
 import android.os.Environment
-import androidx.camera.video.*
+import androidx.camera.video.FileOutputOptions
+import androidx.camera.video.Recorder
+import androidx.camera.video.Recording
+import androidx.camera.video.VideoCapture
+import androidx.camera.video.VideoRecordEvent
 import androidx.core.content.ContextCompat
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import java.io.File
 import java.text.SimpleDateFormat
-import java.util.*
+import java.util.Date
+import java.util.Locale
 
 /**
  * Manages video recording lifecycle and state
@@ -28,6 +33,7 @@ class VideoRecordingManager(private val context: Context) {
     /**
      * Start video recording
      */
+    @Suppress("TooGenericExceptionCaught")
     fun startRecording(
         videoCapture: VideoCapture<Recorder>,
         onStarted: (File) -> Unit = {},
@@ -110,8 +116,9 @@ class VideoRecordingManager(private val context: Context) {
      * Create video file in app-specific storage
      */
     private fun createVideoFile(): File {
-        val videoDir = context.getExternalFilesDir(Environment.DIRECTORY_MOVIES)
-            ?: throw IllegalStateException("Cannot access external storage")
+        val videoDir = checkNotNull(context.getExternalFilesDir(Environment.DIRECTORY_MOVIES)) {
+            "Cannot access external storage"
+        }
 
         if (!videoDir.exists()) {
             videoDir.mkdirs()

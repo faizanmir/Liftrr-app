@@ -49,6 +49,7 @@ class ProfileViewModel @Inject constructor(
         loadUserProfile()
     }
 
+    @Suppress("TooGenericExceptionCaught")
     private fun loadUserProfile() {
         viewModelScope.launch(dispatchers.io) {
             try {
@@ -106,6 +107,7 @@ class ProfileViewModel @Inject constructor(
         }
     }
 
+    @Suppress("TooGenericExceptionCaught")
     fun logout() {
         viewModelScope.launch(dispatchers.io) {
             try {

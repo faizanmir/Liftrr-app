@@ -23,7 +23,6 @@ class BenchPressExercise : Exercise {
         private const val ELBOW_BOTTOM_LIMIT = 85f   // Bar near chest (90 degrees or less)
         private const val ELBOW_LOCKOUT_TARGET = 160f
         private const val FLARE_LIMIT_HIGH = 80f      // Dangerous shoulder stress (T-pose)
-        private const val FLARE_LIMIT_LOW = 30f       // Too tucked
 
         private const val MIN_REP_DURATION = 700L
         private const val STABILITY_FRAMES = 2

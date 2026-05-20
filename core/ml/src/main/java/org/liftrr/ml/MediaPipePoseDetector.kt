@@ -78,6 +78,7 @@ class MediaPipePoseDetector @Inject constructor(
     // Public API
     // ───────────────────────────────────────────────────────────────────────
 
+    @Suppress("TooGenericExceptionCaught")
     override fun initialize(runningMode: RunningMode) {
         lock.withLock {
             if (state is State.Initialized) {
@@ -96,6 +97,7 @@ class MediaPipePoseDetector @Inject constructor(
         }
     }
 
+    @Suppress("TooGenericExceptionCaught")
     override fun stop() {
         Log.d(TAG, "Stopping pose detector")
         lock.withLock {
@@ -134,6 +136,7 @@ class MediaPipePoseDetector @Inject constructor(
      *
      * @return PoseDetectionResult or null if detector is stopped
      */
+    @Suppress("TooGenericExceptionCaught")
     override fun detectPose(bitmap: Bitmap, timestampMs: Long): PoseDetectionResult? {
         val landmarker = getLandmarkerOrInitialize(RunningMode.IMAGE)
             ?: return PoseDetectionResult.Error("Detector is stopped")
@@ -254,6 +257,7 @@ class MediaPipePoseDetector @Inject constructor(
     // Async Detection Implementation
     // ───────────────────────────────────────────────────────────────────────
 
+    @Suppress("TooGenericExceptionCaught")
     private fun detectPoseAsyncInternal(
         bitmap: Bitmap,
         timestampMs: Long,

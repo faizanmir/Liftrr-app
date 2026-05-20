@@ -354,7 +354,7 @@ fun UserDetailsContent(
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                     verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    FITNESS_GOALS.forEach { goal ->
+                    fitnessGoals.forEach { goal ->
                         SelectableChip(
                             label = goal,
                             selected = goal in formState.selectedGoals,

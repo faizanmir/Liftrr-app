@@ -1,3 +1,5 @@
+@file:Suppress("MatchingDeclarationName")
+
 package org.liftrr.ui.screens
 
 import androidx.compose.foundation.isSystemInDarkTheme
@@ -78,15 +80,6 @@ sealed class Screen : NavKey {
 }
 
 // ─── Navigation Helpers ──────────────────────────────────────────────────────
-
-/**
- * Top-level destinations - back gesture exits app instead of navigating back
- * These are the main "home" screens where user can access primary app features
- */
-private fun isTopLevelDestination(screen: NavKey) = screen is Screen.Home ||
-        screen is Screen.History ||
-        screen is Screen.Analytics ||
-        screen is Screen.Settings
 
 /**
  * Determines if a screen should use modal animations (slide up from bottom)

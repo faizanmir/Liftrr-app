@@ -34,7 +34,8 @@ object DatabaseMigrations {
                 "CREATE INDEX IF NOT EXISTS `index_workout_sync_queue_sessionId` ON `workout_sync_queue` (`sessionId`)"
             )
             db.execSQL(
-                "CREATE INDEX IF NOT EXISTS `index_workout_sync_queue_state_nextEligibleAt` ON `workout_sync_queue` (`state`, `nextEligibleAt`)"
+                "CREATE INDEX IF NOT EXISTS `index_workout_sync_queue_state_nextEligibleAt` " +
+                    "ON `workout_sync_queue` (`state`, `nextEligibleAt`)"
             )
             db.execSQL(
                 "CREATE INDEX IF NOT EXISTS `index_workout_sync_queue_operation` ON `workout_sync_queue` (`operation`)"

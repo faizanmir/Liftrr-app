@@ -17,7 +17,10 @@ import java.util.UUID
 class KeyFrameCapture(private val context: Context) {
 
     private val capturedFrames = mutableListOf<CapturedFrame>()
-    private val TAG = "KeyFrameCapture"
+
+    companion object {
+        private const val TAG = "KeyFrameCapture"
+    }
 
     /**
      * Capture a frame during workout with phase information
@@ -51,6 +54,7 @@ class KeyFrameCapture(private val context: Context) {
      * Captures multiple phases per rep for best/worst/medium reps
      * Returns list of KeyFrame metadata with minimum 10 frames for quality analysis
      */
+    @Suppress("TooGenericExceptionCaught")
     fun processAndSaveKeyFrames(sessionId: String): List<KeyFrame> {
         if (capturedFrames.isEmpty()) {
             Log.w(TAG, "No frames captured")
@@ -142,9 +146,9 @@ class KeyFrameCapture(private val context: Context) {
             }
 
             // If we don't have enough frames (minimum 10), add some single-phase frames from other reps
-            val MIN_FRAMES = 10
-            if (keyFrames.size < MIN_FRAMES) {
-                val additionalNeeded = MIN_FRAMES - keyFrames.size
+            val minFrames = 10
+            if (keyFrames.size < minFrames) {
+                val additionalNeeded = minFrames - keyFrames.size
                 val remainingReps = framesByRep.keys.filterNot { it in selectedReps }
 
                 remainingReps.take(additionalNeeded).forEach { repNumber ->
@@ -165,7 +169,12 @@ class KeyFrameCapture(private val context: Context) {
                                 repNumber = repNumber,
                                 frameType = KeyFrameType.REFERENCE,
                                 imagePath = it,
-                                description = "Rep #$repNumber - ${bestFrame.movementPhase.name.lowercase().replaceFirstChar { it.uppercase() }} - Score: ${(bestFrame.formScore * 100).toInt()}%",
+                                description = buildString {
+                                    val phase = bestFrame.movementPhase.name.lowercase()
+                                        .replaceFirstChar { it.uppercase() }
+                                    val score = (bestFrame.formScore * 100).toInt()
+                                    append("Rep #$repNumber - $phase - Score: $score%")
+                                },
                                 formScore = bestFrame.formScore,
                                 movementPhase = bestFrame.movementPhase,
                                 diagnostics = bestFrame.diagnostics
@@ -175,7 +184,11 @@ class KeyFrameCapture(private val context: Context) {
                 }
             }
 
-            Log.d(TAG, "Saved ${keyFrames.size} key frames for session $sessionId from ${framesByRep.size} reps with ${capturedFrames.size} total frames")
+            Log.d(
+                TAG,
+                "Saved ${keyFrames.size} key frames for session $sessionId from " +
+                    "${framesByRep.size} reps with ${capturedFrames.size} total frames"
+            )
 
         } catch (e: Exception) {
             Log.e(TAG, "Error processing key frames", e)
@@ -187,6 +200,7 @@ class KeyFrameCapture(private val context: Context) {
     /**
      * Save a frame with skeletal overlay
      */
+    @Suppress("TooGenericExceptionCaught")
     private fun saveFrameWithOverlay(
         frame: CapturedFrame,
         directory: File,

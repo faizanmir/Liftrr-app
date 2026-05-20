@@ -37,6 +37,7 @@ class WorkoutPlaybackViewModel @Inject constructor(
     private val _isExporting = MutableStateFlow(false)
     val isExporting: StateFlow<Boolean> = _isExporting.asStateFlow()
 
+    @Suppress("TooGenericExceptionCaught")
     fun loadWorkoutSession(sessionId: String) {
         viewModelScope.launch {
             try {
@@ -92,6 +93,7 @@ class WorkoutPlaybackViewModel @Inject constructor(
     /**
      * Share workout summary as text
      */
+    @Suppress("TooGenericExceptionCaught")
     fun shareAsText(workoutData: WorkoutPlaybackData) {
         viewModelScope.launch(dispatchers.io) {
             try {
@@ -124,6 +126,7 @@ class WorkoutPlaybackViewModel @Inject constructor(
     /**
      * Share workout as PDF with full details and key frames
      */
+    @Suppress("TooGenericExceptionCaught")
     fun shareAsPdf(sessionId: String) {
         viewModelScope.launch(dispatchers.io) {
             try {
