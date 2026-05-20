@@ -46,23 +46,32 @@ class WorkoutSessionBuilder(
     private val id = generateSessionId()
     private val startTime = System.currentTimeMillis()
     private val reps = mutableListOf<RepData>()
-    private val poseFrames = mutableListOf<PoseFrame>()
+    private val poseFrames = ArrayDeque<PoseFrame>()
     private var videoPath: String? = null
     private var frameCounter = 0
+    private var lastFrameAddedAt = 0L
 
     fun addRep(rep: RepData) {
         reps.add(rep)
     }
 
     fun addPoseFrame(poseResult: PoseDetectionResult, currentRepNumber: Int? = null) {
-        poseFrames.add(
+        val now = System.currentTimeMillis()
+        // Downsample input to ~10fps (analytics — depth, tempo, form issues —
+        // doesn't need every frame, but the raw 30fps would balloon memory).
+        if (now - lastFrameAddedAt < MIN_FRAME_INTERVAL_MS) return
+        lastFrameAddedAt = now
+
+        poseFrames.addLast(
             PoseFrame(
-                timestamp = System.currentTimeMillis(),
+                timestamp = now,
                 frameNumber = frameCounter++,
                 poseResult = poseResult,
                 repNumber = currentRepNumber
             )
         )
+        // Hard cap as a safety net for very long sessions.
+        while (poseFrames.size > MAX_POSE_FRAMES) poseFrames.removeFirst()
     }
 
     fun setVideoPath(path: String) {
@@ -84,6 +93,12 @@ class WorkoutSessionBuilder(
     }
 
     companion object {
+        // ~10fps cap on frames retained for offline analytics.
+        private const val MIN_FRAME_INTERVAL_MS = 100L
+
+        // Safety cap: ~10fps * 60 min = 36k. Stops unbounded growth on very long sessions.
+        private const val MAX_POSE_FRAMES = 36_000
+
         private fun generateSessionId(): String {
             return "session_${System.currentTimeMillis()}_${(0..9999).random()}"
         }

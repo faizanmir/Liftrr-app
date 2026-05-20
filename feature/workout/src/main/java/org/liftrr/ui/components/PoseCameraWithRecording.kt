@@ -34,12 +34,11 @@ import androidx.core.content.ContextCompat
 import androidx.core.graphics.createBitmap
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.viewmodel.compose.viewModel
-import kotlinx.coroutines.asExecutor
 import org.liftrr.data.video.VideoRecordingManager
 import org.liftrr.utils.BitmapPool
-import org.liftrr.utils.DefaultDispatcherProvider
-import org.liftrr.utils.DispatcherProvider
 import java.io.File
+import java.util.concurrent.Executors
+import java.util.concurrent.atomic.AtomicBoolean
 
 /**
  * Camera preview with pose detection and video recording.
@@ -66,9 +65,13 @@ fun PoseCameraWithRecording(
     // Lazily initialized bitmap pool - dimensions set from first frame's output
     val outputPool = remember { mutableStateOf<BitmapPool?>(null) }
 
-    val isProcessingFrame = remember { mutableStateOf(false) }
+    val isProcessingFrame = remember { AtomicBoolean(false) }
     val lastProcessedTime = remember { mutableStateOf(0L) }
     val minFrameInterval = 33L
+
+    // Single-thread executor serialises analyzer calls so check-then-set on
+    // isProcessingFrame and lastProcessedTime cannot race across frames.
+    val analyzerExecutor = remember { Executors.newSingleThreadExecutor() }
 
     DisposableEffect(Unit) {
         val window = (context as? android.app.Activity)?.window
@@ -78,6 +81,7 @@ fun PoseCameraWithRecording(
             window?.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
             recordingManager.cleanup()
             outputPool.value?.clear()
+            analyzerExecutor.shutdown()
         }
     }
 
@@ -117,9 +121,7 @@ fun PoseCameraWithRecording(
                         .setOutputImageFormat(ImageAnalysis.OUTPUT_IMAGE_FORMAT_RGBA_8888)
                         .build()
                         .also { analysis ->
-                            analysis.setAnalyzer(
-                                DefaultDispatcherProvider().io.asExecutor()
-                            ) { imageProxy ->
+                            analysis.setAnalyzer(analyzerExecutor) { imageProxy ->
                                 processImageProxyWithSkipping(
                                     imageProxy,
                                     onFrameCaptured,
@@ -165,12 +167,12 @@ fun PoseCameraWithRecording(
     }
 }
 
-@Suppress("TooGenericExceptionCaught")
+@Suppress("TooGenericExceptionCaught", "LongParameterList")
 private fun processImageProxyWithSkipping(
     imageProxy: ImageProxy,
     onFrameCaptured: (bitmap: Bitmap, timestamp: Long, release: () -> Unit) -> Unit,
     outputPool: MutableState<BitmapPool?>,
-    isProcessingFrame: MutableState<Boolean>,
+    isProcessingFrame: AtomicBoolean,
     lastProcessedTime: MutableState<Long>,
     minFrameInterval: Long
 ) {
@@ -178,11 +180,9 @@ private fun processImageProxyWithSkipping(
         val currentTime = System.currentTimeMillis()
         val timeSinceLastFrame = currentTime - lastProcessedTime.value
 
-        if (isProcessingFrame.value || timeSinceLastFrame < minFrameInterval) {
-            return
-        }
+        if (timeSinceLastFrame < minFrameInterval) return
+        if (!isProcessingFrame.compareAndSet(false, true)) return
 
-        isProcessingFrame.value = true
         lastProcessedTime.value = currentTime
 
         val bitmap = imageProxyToBitmap(imageProxy, outputPool)
@@ -195,14 +195,14 @@ private fun processImageProxyWithSkipping(
                 } else if (!bitmap.isRecycled) {
                     bitmap.recycle()
                 }
-                isProcessingFrame.value = false
+                isProcessingFrame.set(false)
             }
         } else {
-            isProcessingFrame.value = false
+            isProcessingFrame.set(false)
         }
     } catch (e: Exception) {
         android.util.Log.e("PoseCameraWithRecording", "Frame processing failed", e)
-        isProcessingFrame.value = false
+        isProcessingFrame.set(false)
     } finally {
         imageProxy.close()
     }

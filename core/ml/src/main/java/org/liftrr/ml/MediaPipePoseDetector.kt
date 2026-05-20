@@ -39,7 +39,7 @@ class MediaPipePoseDetector @Inject constructor(
 
     private sealed class State {
         object Uninitialized : State()
-        data class Initialized(val landmarker: PoseLandmarker) : State()
+        data class Initialized(val landmarker: PoseLandmarker, val mode: RunningMode) : State()
         object Stopped : State()
     }
 
@@ -58,8 +58,8 @@ class MediaPipePoseDetector @Inject constructor(
     /**
      * Callback invoked when MediaPipe finishes processing a bitmap.
      * Used to safely release pooled bitmaps back to the caller.
+     * Always read/written under [lock] to keep submit-and-listener fire ordered.
      */
-    @Volatile
     private var pendingBitmapRelease: (() -> Unit)? = null
 
     // ─── Configuration ─────────────────────────────────────────────────────
@@ -88,7 +88,7 @@ class MediaPipePoseDetector @Inject constructor(
 
             try {
                 val landmarker = createPoseLandmarker(runningMode)
-                state = State.Initialized(landmarker)
+                state = State.Initialized(landmarker, runningMode)
                 Log.d(TAG, "PoseLandmarker initialized successfully in $runningMode mode")
             } catch (e: Exception) {
                 state = State.Uninitialized
@@ -106,7 +106,7 @@ class MediaPipePoseDetector @Inject constructor(
             when (val currentState = state) {
                 is State.Initialized -> {
                     try {
-                        releasePendingBitmap()
+                        releasePendingBitmapLocked()
                         currentState.landmarker.close()
                     } catch (e: Exception) {
                         Log.e(TAG, "Error stopping detector", e)
@@ -138,8 +138,8 @@ class MediaPipePoseDetector @Inject constructor(
      */
     @Suppress("TooGenericExceptionCaught")
     override fun detectPose(bitmap: Bitmap, timestampMs: Long): PoseDetectionResult? {
-        val landmarker = getLandmarkerOrInitialize(RunningMode.IMAGE)
-            ?: return PoseDetectionResult.Error("Detector is stopped")
+        val landmarker = getLandmarkerForMode(RunningMode.IMAGE)
+            ?: return PoseDetectionResult.Error("Detector unavailable for sync detect")
 
         return try {
             val mpImage = BitmapImageBuilder(bitmap).build()
@@ -221,11 +221,11 @@ class MediaPipePoseDetector @Inject constructor(
 
     private fun PoseLandmarker.PoseLandmarkerOptions.Builder.configureStreamingMode() {
         setResultListener { result, image ->
-            releasePendingBitmap()
+            lock.withLock { releasePendingBitmapLocked() }
             handlePoseResult(result, image.width, image.height)
         }
         setErrorListener { error ->
-            releasePendingBitmap()
+            lock.withLock { releasePendingBitmapLocked() }
             handleError(error)
         }
     }
@@ -234,22 +234,36 @@ class MediaPipePoseDetector @Inject constructor(
     // State Access Helpers
     // ───────────────────────────────────────────────────────────────────────
 
-    private fun getLandmarkerOrInitialize(runningMode: RunningMode): PoseLandmarker? {
+    /**
+     * Return a landmarker for [requiredMode]. If the current landmarker is in a
+     * different mode, calling MediaPipe's [PoseLandmarker.detect] or
+     * [PoseLandmarker.detectAsync] on it throws — so we tear it down and
+     * reinitialize in the right mode.
+     */
+    private fun getLandmarkerForMode(requiredMode: RunningMode): PoseLandmarker? {
         return lock.withLock {
             when (val currentState = state) {
-                is State.Initialized -> currentState.landmarker
+                is State.Initialized -> {
+                    if (currentState.mode == requiredMode) {
+                        currentState.landmarker
+                    } else {
+                        Log.w(
+                            TAG,
+                            "Reinitializing landmarker: have ${currentState.mode}, need $requiredMode"
+                        )
+                        releasePendingBitmapLocked()
+                        runCatching { currentState.landmarker.close() }
+                        state = State.Uninitialized
+                        initialize(requiredMode)
+                        (state as? State.Initialized)?.landmarker
+                    }
+                }
                 State.Uninitialized -> {
-                    initialize(runningMode)
+                    initialize(requiredMode)
                     (state as? State.Initialized)?.landmarker
                 }
                 State.Stopped -> null
             }
-        }
-    }
-
-    private fun getLandmarker(): PoseLandmarker? {
-        return lock.withLock {
-            (state as? State.Initialized)?.landmarker
         }
     }
 
@@ -263,7 +277,7 @@ class MediaPipePoseDetector @Inject constructor(
         timestampMs: Long,
         onBitmapProcessed: (() -> Unit)?
     ) {
-        val landmarker = getLandmarker()
+        val landmarker = getLandmarkerForMode(RunningMode.LIVE_STREAM)
         if (landmarker == null) {
             handleNotInitializedError(onBitmapProcessed)
             return
@@ -274,14 +288,14 @@ class MediaPipePoseDetector @Inject constructor(
 
             lock.withLock {
                 // Release previous bitmap if MediaPipe dropped that frame
-                releasePendingBitmap()
+                releasePendingBitmapLocked()
                 pendingBitmapRelease = onBitmapProcessed
             }
 
             landmarker.detectAsync(mpImage, timestampMs)
         } catch (e: Exception) {
             lock.withLock {
-                releasePendingBitmap()
+                releasePendingBitmapLocked()
             }
             Log.e(TAG, "Async detection failed", e)
             handleError(e)
@@ -352,8 +366,10 @@ class MediaPipePoseDetector @Inject constructor(
     // Bitmap Pool Management
     // ───────────────────────────────────────────────────────────────────────
 
-    private fun releasePendingBitmap() {
-        pendingBitmapRelease?.invoke()
+    /** Must be called while holding [lock]. */
+    private fun releasePendingBitmapLocked() {
+        val callback = pendingBitmapRelease
         pendingBitmapRelease = null
+        callback?.invoke()
     }
 }

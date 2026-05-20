@@ -77,17 +77,23 @@ class DeadliftExercise : Exercise {
                 false
             }
             State.ASCENDING -> {
-                if (hip >= HIP_LOCKOUT_TARGET) currentState = State.LOCKOUT
-                false
-            }
-            State.LOCKOUT -> {
-                // Confirm rep when hips drop significantly below lockout (start of descent)
-                if (hip < HIP_LOCKOUT_TARGET - 6f) {
+                // Count rep on full lockout. Requires the user actually moved from
+                // a bottom (SETUP) through ascent — phantom reps from shifting at
+                // the top can't happen because LOCKOUT only re-enters via descent.
+                if (hip >= HIP_LOCKOUT_TARGET) {
                     val now = System.currentTimeMillis()
+                    currentState = State.LOCKOUT
                     if (now - lastRepTime > MIN_REP_DURATION_MS) {
                         completeRep(now)
                         return true
                     }
+                }
+                false
+            }
+            State.LOCKOUT -> {
+                // Wait for descent to start before transitioning out of LOCKOUT.
+                // Hysteresis (6°) prevents flicker from micro-movement at the top.
+                if (hip < HIP_LOCKOUT_TARGET - 6f) {
                     currentState = State.DESCENDING
                 }
                 false
@@ -178,7 +184,8 @@ class DeadliftExercise : Exercise {
         lastFormScore = calculateFormScore()
         lastRepTime = time
         resetRepMetrics()
-        currentState = State.SETUP
+        frameStabilityCount = 0
+        currentState = State.LOCKOUT
     }
 
     private fun resetRepMetrics() {
