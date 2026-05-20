@@ -119,6 +119,14 @@ fun LiftrrApp(appViewModel: AppViewModel = hiltViewModel()) {
     val backStack = rememberNavBackStack(startDestination)
     val dispatcherOwner = rememberNavigationEventDispatcherOwner(parent = null)
 
+    // When auth resolves after cold start (StateFlow populated by /auth/me), navigate to Home.
+    LaunchedEffect(isUserLoggedIn) {
+        if (isUserLoggedIn && backStack.lastOrNull() is Screen.Welcome) {
+            backStack.clear()
+            backStack.add(Screen.Home)
+        }
+    }
+
     // Track previous backstack size to detect forward vs back navigation
     val previousBackStackSize = remember { mutableIntStateOf(backStack.size) }
     val isNavigatingBack = backStack.size < previousBackStackSize.intValue

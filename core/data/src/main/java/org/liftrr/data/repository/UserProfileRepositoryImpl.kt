@@ -1,13 +1,8 @@
 package org.liftrr.data.repository
 
-import org.liftrr.data.local.user.UserProfileDao
-import org.liftrr.data.models.dto.UserProfileEntity
 import org.liftrr.data.remote.UserProfileApiService
 import org.liftrr.data.remote.dto.profile.UserProfileRequest
 import org.liftrr.data.remote.dto.profile.UserProfileResponse
-import org.liftrr.data.repository.mappers.toDomain
-import org.liftrr.data.repository.mappers.toDto
-import org.liftrr.domain.auth.AuthRepository
 import org.liftrr.domain.user.FitnessLevel
 import org.liftrr.domain.user.Gender
 import org.liftrr.domain.user.UnitSystem
@@ -20,27 +15,15 @@ import javax.inject.Singleton
 
 @Singleton
 class UserProfileRepositoryImpl @Inject constructor(
-    private val userProfileDao: UserProfileDao,
-    private val userRepository: AuthRepository,
     private val userProfileApiService: UserProfileApiService
 ) : UserProfileRepository {
 
     override suspend fun getUserProfile(): UserProfile? {
-        val userId = currentUserId()
-        val localProfile = userProfileDao.getProfileByUserId(userId)
-        val remoteProfile = try {
-            userProfileApiService.getProfile()
+        return try {
+            userProfileApiService.getProfile().toDomain()
         } catch (e: HttpException) {
-            if (e.code() == HTTP_NOT_FOUND) return localProfile?.toDomain()
-            throw e
+            if (e.code() == HTTP_NOT_FOUND) null else throw e
         }
-
-        val mergedProfile = remoteProfile.toLocalEntity(
-            userId = userId,
-            fallback = localProfile
-        )
-        userProfileDao.insert(mergedProfile)
-        return mergedProfile.toDomain()
     }
 
     override suspend fun insertUserProfile(userProfile: UserProfile): Boolean {
@@ -54,13 +37,11 @@ class UserProfileRepositoryImpl @Inject constructor(
                 throw e
             }
         }
-        userProfileDao.insert(userProfile.toDto())
         return true
     }
 
     override suspend fun deleteUserProfile(userProfile: UserProfile): Boolean {
         userProfileApiService.deleteProfile()
-        userProfileDao.deleteByUserId(userProfile.userId)
         return true
     }
 
@@ -82,20 +63,22 @@ class UserProfileRepositoryImpl @Inject constructor(
                 goalsJson = goalsJson
             )
         )
-        userProfileDao.updateFields(
-            userId = currentUserId(),
-            firstName = firstName,
-            lastName = lastName,
-            gender = gender,
-            height = height,
-            fitnessLevel = fitnessLevel,
-            goalsJson = goalsJson
-        )
         return true
     }
 
-    private suspend fun currentUserId(): String =
-        userRepository.getCurrentUserOnce()?.userId ?: throw Exception("User not signed in")
+    private fun UserProfileResponse.toDomain(): UserProfile = UserProfile(
+        userId = userId,
+        firstName = firstName ?: "",
+        lastName = lastName ?: "",
+        gender = gender.toEnumOrDefault(Gender.PREFER_NOT_TO_SAY),
+        height = height ?: DEFAULT_HEIGHT_CM,
+        fitnessLevel = fitnessLevel.toEnumOrDefault(FitnessLevel.BEGINNER),
+        dateOfBirth = dateOfBirth ?: System.currentTimeMillis(),
+        weight = weight,
+        goalsJson = goalsJson,
+        preferredExercises = preferredExercises.toEnumOrDefault(null),
+        preferredUnits = preferredUnits.toEnumOrDefault(UnitSystem.METRIC)
+    )
 
     private fun UserProfile.toRemoteRequest(): UserProfileRequest =
         UserProfileRequest(
@@ -109,27 +92,6 @@ class UserProfileRepositoryImpl @Inject constructor(
             goalsJson = goalsJson,
             preferredExercises = preferredExercises?.name,
             preferredUnits = preferredUnits.name
-        )
-
-    private fun UserProfileResponse.toLocalEntity(
-        userId: String,
-        fallback: UserProfileEntity?
-    ): UserProfileEntity =
-        UserProfileEntity(
-            userId = userId,
-            firstName = firstName ?: fallback?.firstName.orEmpty(),
-            lastName = lastName ?: fallback?.lastName.orEmpty(),
-            gender = gender.toEnumOrDefault(fallback?.gender ?: Gender.PREFER_NOT_TO_SAY),
-            height = height ?: fallback?.height ?: DEFAULT_HEIGHT_CM,
-            fitnessLevel = fitnessLevel.toEnumOrDefault(fallback?.fitnessLevel ?: FitnessLevel.BEGINNER),
-            dob = dateOfBirth ?: fallback?.dob ?: System.currentTimeMillis(),
-            weight = weight ?: fallback?.weight,
-            goalsJson = goalsJson ?: fallback?.goalsJson,
-            preferredExercises = preferredExercises.toEnumOrDefault(fallback?.preferredExercises),
-            preferredUnits = preferredUnits.toEnumOrDefault(fallback?.preferredUnits ?: UnitSystem.METRIC),
-            notificationsEnabled = notificationsEnabled,
-            reminderTime = reminderTime ?: fallback?.reminderTime,
-            updatedAt = System.currentTimeMillis()
         )
 
     private inline fun <reified T : Enum<T>> String?.toEnumOrDefault(default: T): T =

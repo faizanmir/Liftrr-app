@@ -10,9 +10,6 @@ import dagger.hilt.android.qualifiers.ApplicationContext
 import dagger.hilt.components.SingletonComponent
 import org.liftrr.data.local.DatabaseMigrations
 import org.liftrr.data.local.LiftrrDb
-import org.liftrr.data.local.sync.SyncQueueDao
-import org.liftrr.data.local.user.UserDao
-import org.liftrr.data.local.user.UserProfileDao
 import org.liftrr.data.local.workout.WeightsDao
 import org.liftrr.data.local.workout.WorkoutDao
 import org.liftrr.domain.auth.AuthRepository
@@ -43,28 +40,10 @@ object DatabaseModule {
     }
 
     @Provides
-    fun provideUserDao(database: LiftrrDb): UserDao {
-        return database.userDao()
-    }
+    fun provideWorkoutDao(database: LiftrrDb): WorkoutDao = database.workoutDao()
 
     @Provides
-    fun provideWorkoutDao(database: LiftrrDb): WorkoutDao {
-        return database.workoutDao()
-    }
-
-    @Provides
-    fun provideUserProfileDao(database: LiftrrDb): UserProfileDao {
-        return database.userProfileDao()
-    }
-
-    @Provides
-    fun provideSyncQueueDao(database: LiftrrDb): SyncQueueDao {
-        return database.syncQueueDao()
-    }
-    @Provides
-    fun provideUserWeightsDao(database: LiftrrDb): WeightsDao {
-        return database.weightDao()
-    }
+    fun provideUserWeightsDao(database: LiftrrDb): WeightsDao = database.weightDao()
 }
 
 @InstallIn(SingletonComponent::class)
