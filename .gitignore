@@ -20,6 +20,7 @@ keystore/
 # Build outputs
 app/build/
 app/release/
+**/build/
 
 # MediaPipe model files (large binaries)
 *.task
@@ -30,3 +31,5 @@ app/google-services.json
 
 # Secrets file (OAuth client IDs, API keys)
 app/src/main/res/values/secrets.xml
+# Local code graph cache
+.code-review-graph/

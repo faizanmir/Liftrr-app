@@ -10,7 +10,6 @@ plugins {
     alias(libs.plugins.kotlin.serialization)
     alias(libs.plugins.ksp)
     alias(libs.plugins.hilt)
-    id("com.google.gms.google-services")
 }
 
 val localProperties = Properties()
@@ -36,13 +35,6 @@ android {
         versionName = "1.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
-
-
-        buildConfigField(
-            "String",
-            "WEB_CLIENT_ID",
-            "\"${localProperties.getProperty("GOOGLE_WEB_CLIENT_ID", "")}\""
-        )
 
     }
 
@@ -134,85 +126,39 @@ tasks.named("preBuild") {
 
 
 dependencies {
-    // AndroidX Core
-    implementation(libs.androidx.core.ktx)
-    implementation(libs.androidx.lifecycle.process)
-    implementation(libs.androidx.lifecycle.runtime.ktx)
-    implementation(libs.androidx.lifecycle.service)
-    implementation(libs.androidx.activity.compose)
-    implementation(libs.androidx.core.splashscreen)
-    implementation(libs.androidx.startup.runtime)
+    // Core modules
+    implementation(project(":core:ui"))
+    implementation(project(":core:domain"))
+    implementation(project(":core:data"))
+    implementation(project(":core:ml"))
 
-    // Compose
+    // Feature modules
+    implementation(project(":feature:auth"))
+    implementation(project(":feature:workout"))
+    implementation(project(":feature:summary"))
+    implementation(project(":feature:history"))
+    implementation(project(":feature:analytics"))
+    implementation(project(":feature:profile"))
+
+    // Hilt (required in :app for @HiltAndroidApp aggregation)
+    implementation(libs.hilt.android)
+    ksp(libs.hilt.compiler)
+
+    // Activity + Compose (needed by MainActivity / LiftrrApp)
+    implementation(libs.androidx.activity.compose)
     implementation(platform(libs.androidx.compose.bom))
     implementation(libs.bundles.compose)
-
-    // Navigation
     implementation(libs.bundles.navigation)
     implementation(libs.kotlinx.serialization.core)
 
-    // Dependency Injection (Hilt)
-    implementation(libs.hilt.android)
-    implementation(libs.androidx.hilt.navigation.compose)
-    implementation(libs.androidx.ui)
-    ksp(libs.hilt.compiler)
+    // Splashscreen
+    implementation(libs.androidx.core.splashscreen)
 
-    // WorkManager
-    implementation(libs.androidx.work.runtime.ktx)
-    implementation(libs.androidx.hilt.work)
-    ksp(libs.hilt.compiler)
-
-    // Database (Room)
-    implementation(libs.bundles.room)
-    ksp(libs.androidx.room.compiler)
-
-    // Datastore
-    implementation(libs.androidx.datastore.preferences)
-
-    // Firebase
-    implementation(platform(libs.firebase.bom))
-    implementation(libs.firebase.auth)
-
-    // Google Services & Auth
-    implementation(libs.bundles.credentials)
-    implementation(libs.play.services.auth)
-    implementation(libs.kotlinx.coroutines.play.services)
-
-    // CameraX
-    implementation(libs.androidx.camera.core)
-    implementation(libs.androidx.camera.camera2)
-    implementation(libs.androidx.camera.lifecycle)
-    implementation(libs.androidx.camera.view)
-    implementation(libs.androidx.camera.video)
-
-    // Media3 ExoPlayer for video playback
-    implementation(libs.androidx.media3.exoplayer)
-    implementation(libs.androidx.media3.ui)
-
-    // ComposeCharts for data visualization
-    implementation(libs.compose.charts)
-
-    // Retrofit
-    implementation(libs.retrofit)
-    implementation(libs.converter.gson)
-    implementation(libs.okhttp.logging.interceptor)
-
-    // UI & Material
+    // AppCompat (MainActivity extends AppCompatActivity)
     implementation(libs.material)
-    implementation(libs.accompanist.permissions)
 
-    // Image Loading
-    implementation(libs.coil.compose)
-    implementation(libs.coil.network.okhttp)
-
-    implementation(libs.androidx.paging.runtime)
-    implementation(libs.androidx.paging.compose)
-
-    // MediaPipe for Pose Detection
-    implementation(libs.mediapipe.tasks.vision)
-
-    // MediaPipe for LLM Inference (On-device AI)
-    implementation(libs.tasks.genai)
+    // Lifecycle (process lifecycle observer in Application)
+    implementation(libs.androidx.lifecycle.process)
 
     // Testing
     testImplementation(libs.junit)
