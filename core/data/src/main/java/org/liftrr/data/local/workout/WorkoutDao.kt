@@ -7,8 +7,8 @@ import androidx.room.OnConflictStrategy
 import androidx.room.Query
 import androidx.room.Update
 import kotlinx.coroutines.flow.Flow
-import org.liftrr.data.models.dto.SyncStatus
-import org.liftrr.data.models.dto.WorkoutSessionEntity
+import org.liftrr.data.local.SyncStatus
+import org.liftrr.data.local.workout.WorkoutSessionEntity
 
 @Dao
 interface WorkoutDao {

@@ -15,7 +15,7 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import com.google.gson.Gson
-import org.liftrr.data.models.dto.RepDataDto
+import org.liftrr.data.remote.dto.workout.RepDataDto
 import org.liftrr.domain.auth.AuthRepository
 import org.liftrr.domain.workout.WorkoutRecord
 import org.liftrr.domain.weight.UserWeightRepository

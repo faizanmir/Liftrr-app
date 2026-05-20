@@ -1,4 +1,4 @@
-package org.liftrr.data.models.dto
+package org.liftrr.data.local.workout
 
 import androidx.room.Entity
 import androidx.room.Index

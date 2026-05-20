@@ -9,7 +9,7 @@ import dagger.assisted.Assisted
 import dagger.assisted.AssistedInject
 import org.liftrr.data.local.workout.WorkoutDao
 import org.liftrr.data.local.workout.WorkoutSyncQueueDao
-import org.liftrr.data.models.dto.WorkoutSyncOperation
+import org.liftrr.data.local.workout.WorkoutSyncOperation
 import org.liftrr.utils.DispatcherProvider
 import java.io.File
 import kotlinx.coroutines.withContext

@@ -1,6 +1,6 @@
 package org.liftrr.data.remote.dto.workout
 
-import org.liftrr.data.models.dto.WorkoutSessionEntity
+import org.liftrr.data.local.workout.WorkoutSessionEntity
 
 data class CreateWorkoutSessionRequest(
     val clientSessionId: String,

@@ -6,9 +6,9 @@ import androidx.room.TypeConverters
 import org.liftrr.data.local.workout.WeightsDao
 import org.liftrr.data.local.workout.WorkoutDao
 import org.liftrr.data.local.workout.WorkoutSyncQueueDao
-import org.liftrr.data.models.dto.UserWeightDto
-import org.liftrr.data.models.dto.WorkoutSessionEntity
-import org.liftrr.data.models.dto.WorkoutSyncQueueEntity
+import org.liftrr.data.local.workout.UserWeightDto
+import org.liftrr.data.local.workout.WorkoutSessionEntity
+import org.liftrr.data.local.workout.WorkoutSyncQueueEntity
 
 @Database(
     entities = [

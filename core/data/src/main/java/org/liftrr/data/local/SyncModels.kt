@@ -1,4 +1,4 @@
-package org.liftrr.data.models.dto
+package org.liftrr.data.local
 
 enum class SyncStatus {
     PENDING,

@@ -13,7 +13,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import org.liftrr.data.models.dto.RepDataDto
+import org.liftrr.data.remote.dto.workout.RepDataDto
 import org.liftrr.domain.workout.WorkoutRepository
 import org.liftrr.domain.analytics.FormConsistencyAnalysis
 import org.liftrr.domain.analytics.SymmetryAnalysis

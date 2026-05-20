@@ -1,9 +1,9 @@
 package org.liftrr.data.local
 
 import androidx.room.TypeConverter
-import org.liftrr.data.models.dto.SyncStatus
-import org.liftrr.data.models.dto.WorkoutSyncOperation
-import org.liftrr.data.models.dto.WorkoutSyncState
+import org.liftrr.data.local.SyncStatus
+import org.liftrr.data.local.workout.WorkoutSyncOperation
+import org.liftrr.data.local.workout.WorkoutSyncState
 
 class Converters {
 

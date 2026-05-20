@@ -1,8 +1,9 @@
-package org.liftrr.data.models.dto
+package org.liftrr.data.local.workout
 
 import androidx.room.Entity
 import androidx.room.Index
 import androidx.room.PrimaryKey
+import org.liftrr.data.local.SyncStatus
 
 @Entity(
     tableName = "workout_sessions",
@@ -20,7 +21,6 @@ data class WorkoutSessionEntity(
     @PrimaryKey
     val sessionId: String,
 
-    // Core workout data  
     val exerciseType: String,
     val totalReps: Int,
     val goodReps: Int,
@@ -32,25 +32,20 @@ data class WorkoutSessionEntity(
     val weight: Float?,
     val timestamp: Long,
 
-    // Local media
-    val videoUri: String?,                  // Local file path
+    val videoUri: String?,
     val repDataJson: String? = null,
-    val keyFramesJson: String? = null,       // Serialized list of KeyFrame objects
+    val keyFramesJson: String? = null,
 
-    // Cloud storage URLs
-    val videoCloudUrl: String? = null,       // S3/Cloud Storage URL
-    val keyFramesCloudUrls: String? = null,  // JSON array of cloud URLs
+    val videoCloudUrl: String? = null,
+    val keyFramesCloudUrls: String? = null,
 
-    // User association
-    val userId: String,                       // Owner of this workout
+    val userId: String,
 
-    // Sync tracking
-    val serverId: String? = null,            // Backend-assigned ID (null for local-only)
+    val serverId: String? = null,
     val syncStatus: SyncStatus = SyncStatus.PENDING,
-    val lastSyncedAt: Long? = null,          // Timestamp of last successful sync
-    val version: Int = 1,                    // For optimistic locking/conflict resolution
+    val lastSyncedAt: Long? = null,
+    val version: Int = 1,
 
-    // Soft delete
     val isDeleted: Boolean = false,
     val deletedAt: Long? = null,
 )

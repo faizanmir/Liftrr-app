@@ -1,7 +1,7 @@
 package org.liftrr.data.repository.mappers
 
-import org.liftrr.data.models.dto.SyncStatus
-import org.liftrr.data.models.dto.WorkoutSessionEntity
+import org.liftrr.data.local.SyncStatus
+import org.liftrr.data.local.workout.WorkoutSessionEntity
 import org.liftrr.domain.workout.WorkoutRecord
 
 fun WorkoutSessionEntity.toDomain(): WorkoutRecord = WorkoutRecord(

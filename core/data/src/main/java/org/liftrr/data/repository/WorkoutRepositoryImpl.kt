@@ -8,10 +8,10 @@ import org.liftrr.data.local.LiftrrDb
 import org.liftrr.data.local.preferences.TokenStore
 import org.liftrr.data.local.workout.WorkoutDao
 import org.liftrr.data.local.workout.WorkoutSyncQueueDao
-import org.liftrr.data.models.dto.SyncStatus
-import org.liftrr.data.models.dto.WorkoutSyncOperation
-import org.liftrr.data.models.dto.WorkoutSyncQueueEntity
-import org.liftrr.data.models.dto.WorkoutSyncState
+import org.liftrr.data.local.SyncStatus
+import org.liftrr.data.local.workout.WorkoutSyncOperation
+import org.liftrr.data.local.workout.WorkoutSyncQueueEntity
+import org.liftrr.data.local.workout.WorkoutSyncState
 import org.liftrr.data.repository.mappers.toDomain
 import org.liftrr.data.repository.mappers.toEntity
 import org.liftrr.data.workmanager.WorkoutSyncScheduler

@@ -42,7 +42,7 @@ import ir.ehsannarmani.compose_charts.LineChart
 import ir.ehsannarmani.compose_charts.models.AnimationMode
 import ir.ehsannarmani.compose_charts.models.DrawStyle
 import ir.ehsannarmani.compose_charts.models.Line
-import org.liftrr.data.models.dto.RepDataDto
+import org.liftrr.data.remote.dto.workout.RepDataDto
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable

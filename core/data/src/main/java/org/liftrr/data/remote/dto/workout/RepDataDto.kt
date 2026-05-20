@@ -1,4 +1,4 @@
-package org.liftrr.data.models.dto
+package org.liftrr.data.remote.dto.workout
 
 data class RepDataDto(
     val repNumber: Int,

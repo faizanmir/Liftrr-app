@@ -4,9 +4,9 @@ import androidx.room.Dao
 import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
-import org.liftrr.data.models.dto.WorkoutSyncOperation
-import org.liftrr.data.models.dto.WorkoutSyncQueueEntity
-import org.liftrr.data.models.dto.WorkoutSyncState
+import org.liftrr.data.local.workout.WorkoutSyncOperation
+import org.liftrr.data.local.workout.WorkoutSyncQueueEntity
+import org.liftrr.data.local.workout.WorkoutSyncState
 
 @Dao
 interface WorkoutSyncQueueDao {

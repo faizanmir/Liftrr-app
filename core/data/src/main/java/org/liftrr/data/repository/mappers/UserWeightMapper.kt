@@ -1,6 +1,6 @@
 package org.liftrr.data.repository.mappers
 
-import org.liftrr.data.models.dto.UserWeightDto
+import org.liftrr.data.local.workout.UserWeightDto
 import org.liftrr.domain.weight.UserWeight
 
 fun UserWeightDto.toDomain(): UserWeight {

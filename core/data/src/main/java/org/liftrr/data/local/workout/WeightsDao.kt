@@ -6,7 +6,7 @@ import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
 import androidx.room.Update
-import org.liftrr.data.models.dto.UserWeightDto
+import org.liftrr.data.local.workout.UserWeightDto
 import org.liftrr.domain.workout.ExerciseType
 
 @Dao
