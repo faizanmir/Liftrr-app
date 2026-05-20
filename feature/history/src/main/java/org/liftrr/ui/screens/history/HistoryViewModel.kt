@@ -73,6 +73,10 @@ class HistoryViewModel @Inject constructor(
 
     private var pendingDeletionSessionId: String? = null
 
+    init {
+        viewModelScope.launch { workoutRepository.syncFromRemote() }
+    }
+
     val uiState: StateFlow<HistoryUiState> = combine(
         workoutRepository.getAllWorkouts(),
         _selectedFilter

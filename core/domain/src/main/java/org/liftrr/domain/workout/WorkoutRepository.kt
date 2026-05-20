@@ -23,6 +23,7 @@ interface WorkoutRepository {
     fun getTodayTotalDuration(): Flow<Long>
     fun getTodayWorkoutCountByType(): Flow<Map<String, Int>>
     fun getWeeklyStats(): Flow<WorkoutStats>
+    suspend fun syncFromRemote(): Result<Unit>
 }
 
 data class WorkoutStats(

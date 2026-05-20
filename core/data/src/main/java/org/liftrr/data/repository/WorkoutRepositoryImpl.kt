@@ -9,9 +9,12 @@ import org.liftrr.data.local.preferences.TokenStore
 import org.liftrr.data.local.workout.WorkoutDao
 import org.liftrr.data.local.workout.WorkoutSyncQueueDao
 import org.liftrr.data.local.SyncStatus
+import org.liftrr.data.local.workout.WorkoutSessionEntity
 import org.liftrr.data.local.workout.WorkoutSyncOperation
 import org.liftrr.data.local.workout.WorkoutSyncQueueEntity
 import org.liftrr.data.local.workout.WorkoutSyncState
+import org.liftrr.data.remote.WorkoutSessionApiService
+import org.liftrr.data.remote.dto.workout.WorkoutSessionResponse
 import org.liftrr.data.repository.mappers.toDomain
 import org.liftrr.data.repository.mappers.toEntity
 import org.liftrr.data.workmanager.WorkoutSyncScheduler
@@ -20,6 +23,7 @@ import org.liftrr.domain.workout.WorkoutRepository
 import org.liftrr.domain.workout.WorkoutStats
 import org.liftrr.utils.DispatcherProvider
 import java.util.Calendar
+import java.util.UUID
 import javax.inject.Inject
 
 class WorkoutRepositoryImpl @Inject constructor(
@@ -28,7 +32,8 @@ class WorkoutRepositoryImpl @Inject constructor(
     private val syncQueueDao: WorkoutSyncQueueDao,
     private val tokenStore: TokenStore,
     private val syncScheduler: WorkoutSyncScheduler,
-    private val dispatchers: DispatcherProvider
+    private val dispatchers: DispatcherProvider,
+    private val workoutSessionApiService: WorkoutSessionApiService
 ) : WorkoutRepository {
 
     override fun getAllWorkouts(): Flow<List<WorkoutRecord>> =
@@ -189,8 +194,44 @@ class WorkoutRepositoryImpl @Inject constructor(
         "A" -> 1; "B" -> 2; "C" -> 3; "D" -> 4; "F" -> 5; else -> 6
     }
 
+    override suspend fun syncFromRemote(): Result<Unit> = runCatching {
+        withContext(dispatchers.io) {
+            val sessions = workoutSessionApiService.listSessions()
+            val userId = tokenStore.getUserIdFromAccessToken() ?: return@withContext
+            sessions.forEach { response ->
+                val serverId = response.backendSessionId ?: return@forEach
+                val existing = workoutDao.getByServerId(serverId)
+                if (existing == null) {
+                    workoutDao.insertWorkout(response.toRemoteEntity(userId))
+                }
+            }
+        }
+    }
+
     private fun resolveUserId(workout: WorkoutRecord): String =
         tokenStore.getUserIdFromAccessToken()
             ?: workout.userId.takeUnless { it == "local" }
             ?: error("Cannot save workout without an authenticated backend user")
 }
+
+private fun WorkoutSessionResponse.toRemoteEntity(userId: String) = WorkoutSessionEntity(
+    sessionId = UUID.randomUUID().toString(),
+    serverId = backendSessionId,
+    exerciseType = exerciseType ?: "",
+    totalReps = totalReps ?: 0,
+    goodReps = goodReps ?: 0,
+    badReps = badReps ?: 0,
+    averageQuality = averageQuality ?: 0f,
+    durationMs = durationMs ?: 0L,
+    overallScore = overallScore ?: 0f,
+    grade = grade ?: "",
+    weight = weight,
+    timestamp = timestamp ?: 0L,
+    videoUri = null,
+    repDataJson = null,
+    keyFramesJson = null,
+    videoCloudUrl = videoCloudUrl,
+    userId = userId,
+    syncStatus = SyncStatus.SYNCED,
+    lastSyncedAt = System.currentTimeMillis()
+)

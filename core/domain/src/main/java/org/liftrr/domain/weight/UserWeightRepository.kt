@@ -8,6 +8,8 @@ interface UserWeightRepository {
     suspend fun saveUserWeight(userWeight: UserWeight)
     suspend fun updateUserWeight(userWeight: UserWeight)
     suspend fun deleteUserWeight(exerciseType: ExerciseType)
+    suspend fun syncFromRemote(): Result<Unit>
+    suspend fun syncToRemote(): Result<Unit>
 }
 
 

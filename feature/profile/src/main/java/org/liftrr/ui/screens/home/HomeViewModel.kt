@@ -32,6 +32,7 @@ class HomeViewModel @Inject constructor(
     }
 
     private fun loadRealData() {
+        viewModelScope.launch { workoutRepository.syncFromRemote() }
         viewModelScope.launch {
             combine(
                 workoutRepository.getTodayWorkouts(),

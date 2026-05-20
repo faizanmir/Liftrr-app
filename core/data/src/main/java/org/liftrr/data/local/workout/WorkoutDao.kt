@@ -108,4 +108,7 @@ interface WorkoutDao {
 
     @Query("DELETE FROM workout_sessions")
     suspend fun deleteAllWorkouts()
+
+    @Query("SELECT * FROM workout_sessions WHERE serverId = :serverId AND isDeleted = 0 LIMIT 1")
+    suspend fun getByServerId(serverId: String): WorkoutSessionEntity?
 }
