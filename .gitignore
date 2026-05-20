@@ -40,3 +40,7 @@ app/google-services.json
 
 # Generated knowledge graph artifacts
 graphify-out/
+
+# Local-only agent docs
+AGENTS.md
+CLAUDE.md
