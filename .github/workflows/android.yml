@@ -28,8 +28,8 @@ jobs:
 
     - name: Create secrets.xml
       run: |
-        mkdir -p app/src/main/res/values
-        cat > app/src/main/res/values/secrets.xml <<EOF
+        mkdir -p core/data/src/main/res/values
+        cat > core/data/src/main/res/values/secrets.xml <<EOF
         <resources>
             <string name="web_client_id" translatable="false">${{ secrets.GOOGLE_WEB_CLIENT_ID }}</string>
         </resources>
@@ -48,3 +48,4 @@ jobs:
         KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
         KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
         KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+        SERVER_URL_RELEASE: ${{ secrets.SERVER_URL_RELEASE }}
